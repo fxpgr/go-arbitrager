@@ -2,15 +2,15 @@ package main
 
 import (
 	"fmt"
-	"github.com/fxpgr/go-ccex-api-client/api/public"
-	"github.com/fxpgr/go-ccex-api-client/models"
+	"github.com/fxpgr/go-exchange-client/api/public"
+	"github.com/fxpgr/go-exchange-client/models"
 	models2 "github.com/fxpgr/go-arbitrager/models"
 	"os"
 	"time"
 	"context"
 	"github.com/fxpgr/go-arbitrager/config"
 	"github.com/fxpgr/go-arbitrager/logger"
-	"github.com/fxpgr/go-ccex-api-client/api/private"
+	"github.com/fxpgr/go-exchange-client/api/private"
 	"github.com/kokardy/listing"
 	"github.com/pkg/errors"
 	"sync"
