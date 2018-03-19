@@ -2,14 +2,14 @@ package config
 
 import (
 	"fmt"
+	"gopkg.in/yaml.v2"
 	"io"
 	"io/ioutil"
 	"os"
-	"gopkg.in/yaml.v2"
 )
 
 type KeySetting struct {
-	APIKey   string `yaml:"api_key"`
+	APIKey    string `yaml:"api_key"`
 	SecretKey string `yaml:"secret_key"`
 }
 
@@ -17,6 +17,7 @@ type Config struct {
 	Hitbtc   KeySetting `yaml:"hitbtc"`
 	Poloniex KeySetting `yaml:"poloniex"`
 	Bitflyer KeySetting `yaml:"bitflyer"`
+	Huobi KeySetting    `yaml:"huobi"`
 }
 
 func (c *Config) Get(exchange string) KeySetting {
@@ -27,6 +28,8 @@ func (c *Config) Get(exchange string) KeySetting {
 		return c.Poloniex
 	case "bitflyer":
 		return c.Bitflyer
+	case "huobi":
+		return c.Huobi
 	}
 	return KeySetting{}
 }
