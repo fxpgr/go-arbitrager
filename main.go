@@ -14,6 +14,8 @@ import (
 	"github.com/kokardy/listing"
 	"github.com/pkg/errors"
 	"sync"
+	"github.com/urfave/cli"
+	ui "github.com/gizak/termui"
 )
 
 type exchangeCurrencyPair struct {
@@ -32,43 +34,91 @@ func help_and_exit() {
 }
 
 func main() {
-	simpleArbitrager := New(0.05)
-	err := simpleArbitrager.RegisterExchanges([]string{"poloniex", "hitbtc", "huobi"})
-	if err != nil {
-		panic(err)
+	app := cli.NewApp()
+	app.Name = "go-arbitrager"
+	app.Usage = "arbitrage bot for dead of gold"
+	app.Flags = []cli.Flag {
+		cli.StringFlag{
+			Name:        "mode, m",
+			Value:       "cli",
+			Usage:       "display mode",
+		},
+		cli.StringFlag{
+			Name:        "config, c",
+			Value:       "config.yml",
+			Usage:       "config path",
+		},
 	}
-	simpleArbitrager.SyncRate()
-	simpleArbitrager.WatchRate()
-	time.Sleep(time.Second*20)
-	tick := time.NewTicker(15*time.Second)
-	for {
-		select{
-		case <- tick.C:
-			opportunities, err := simpleArbitrager.Opportunities()
+	app.Action = func(c *cli.Context) error {
+		configPath := c.String("config")
+		if c.String("mode")=="cui" {
+			err := ui.Init()
 			if err != nil {
-				logger.Get().Error(err)
-				continue
+				panic(err)
 			}
-			/*
-			for _,o := range opportunities {
-				simpleArbitrager.Inspect(o)
-			}*/
-			filterdO,err := opportunities.BuySideFilter("hitbtc")
+			defer ui.Close()
+			p := ui.NewPar(":PRESS q TO QUIT Arbitrager")
+			p.Height = 3
+			p.Width = 50
+			p.TextFgColor = ui.ColorWhite
+			p.BorderFg = ui.ColorCyan
+
+
+
+			ui.Render(p)
+			ui.Handle("/sys/kbd/q", func(ui.Event) {
+					ui.StopLoop()
+					})
+			ui.Handle("/timer/1s", func(e ui.Event) {
+				t := e.Data.(ui.EvtTimer)
+				// t is a EvtTimer
+				if t.Count%2 ==0 {
+					// do something
+				}
+			})
+			ui.Loop()
+
+		}else{
+			simpleArbitrager := New(configPath,0.05)
+			err := simpleArbitrager.RegisterExchanges([]string{"poloniex", "hitbtc", "huobi"})
 			if err != nil {
-				logger.Get().Error(err)
-				continue
+				panic(err)
 			}
-			opp,err := filterdO.HighestDifOpportunity()
-			if err != nil {
-				logger.Get().Error(err)
-				continue
-			}
-			err = simpleArbitrager.Arbitrage(opp)
-			if err != nil {
-				logger.Get().Error(err)
-				continue
+			simpleArbitrager.SyncRate()
+			simpleArbitrager.WatchRate()
+			time.Sleep(time.Second*20)
+			tick := time.NewTicker(15*time.Second)
+			for {
+				select{
+				case <- tick.C:
+					opportunities, err := simpleArbitrager.Opportunities()
+					if err != nil {
+						logger.Get().Error(err)
+						continue
+					}
+					filterdO,err := opportunities.BuySideFilter("hitbtc")
+					if err != nil {
+						logger.Get().Error(err)
+						continue
+					}
+					opp,err := filterdO.HighestDifOpportunity()
+					if err != nil {
+						logger.Get().Error(err)
+						continue
+					}
+					err = simpleArbitrager.Arbitrage(opp)
+					if err != nil {
+						logger.Get().Error(err)
+						continue
+					}
+				}
 			}
 		}
+		return nil
+	}
+	err := app.Run(os.Args)
+	if err != nil {
+		panic(err)
 	}
 	return
 }
@@ -264,6 +314,8 @@ type Arbitrager interface {
 }
 
 type simpleArbitrager struct {
+	configPath string
+
 	frozenCurrency frozenCurrencySyncMap
 	exchangeSymbol exchangeSymbolSyncMap
 	publicClient   publicClientSyncMap
@@ -279,8 +331,9 @@ type simpleArbitrager struct {
 	verifyTracerSlice verifyTracerSyncSlice
 }
 
-func New(expectedProfitRate float64) Arbitrager {
+func New(confPath string,expectedProfitRate float64) Arbitrager {
 	return &simpleArbitrager{
+		configPath:confPath,
 		frozenCurrency:         frozenCurrencySyncMap{make(map[string][]string), new(sync.Mutex)},
 		exchangeSymbol:         exchangeSymbolSyncMap{make(map[string][]models.CurrencyPair), new(sync.Mutex)},
 		publicClient:           publicClientSyncMap{make(map[string]public.PublicClient), new(sync.Mutex)},
@@ -681,7 +734,7 @@ func (a *simpleArbitrager) RegisterExchanges(exchanges []string) error {
 			return err
 		}
 		a.publicClient.Set(v, c)
-		conf := config.ReadConfig("config.yml")
+		conf := config.ReadConfig(a.configPath)
 		setting := conf.Get(v)
 		pc, err := private.NewClient(v, setting.APIKey, setting.SecretKey)
 		if err != nil {
