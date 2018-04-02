@@ -7,6 +7,8 @@ import (
 	"github.com/fxpgr/go-arbitrager/logger"
 	"github.com/urfave/cli"
 	"github.com/fxpgr/go-arbitrager/arbitrager"
+	"github.com/fxpgr/go-exchange-client/api/private"
+	"github.com/fxpgr/go-exchange-client/models"
 )
 
 func help_and_exit() {
@@ -36,8 +38,8 @@ func main() {
 			fmt.Println("not implemented")
 
 		}else{
-			simpleArbitrager := arbitrager.NewSimpleArbitrager(configPath,0.005)
-			err := simpleArbitrager.RegisterExchanges([]string{"poloniex", "hitbtc", "huobi"})
+			simpleArbitrager := arbitrager.NewSimpleArbitrager(configPath,0.01)
+			err := simpleArbitrager.RegisterExchanges(private.TEST, []string{"poloniex", "hitbtc", "huobi"})
 			if err != nil {
 				panic(err)
 			}
@@ -48,7 +50,18 @@ func main() {
 			for {
 				select{
 				case <- tick.C:
-					_, err := simpleArbitrager.Opportunities()
+					opps, err := simpleArbitrager.Opportunities()
+					if err != nil {
+						logger.Get().Error(err)
+						continue
+					}
+					fmt.Println(len(opps))
+					o, err := opps.HighestDifOpportunity()
+					if err != nil {
+						logger.Get().Error(err)
+						continue
+					}
+					err = simpleArbitrager.SwingArbitrage(models.Long, &o)
 					if err != nil {
 						logger.Get().Error(err)
 						continue

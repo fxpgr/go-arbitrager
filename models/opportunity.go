@@ -31,17 +31,17 @@ func (os *Opportunities) BuySideFilter(exchange string) (*Opportunities,error) {
 	return &ret,nil
 }
 
-func (os *Opportunities) HighestDifOpportunity() (*Opportunity,error) {
-	var ret *Opportunity
+func (os *Opportunities) HighestDifOpportunity() (Opportunity,error) {
+	var ret Opportunity
 	dif := 0.0
 	for _, o := range *os {
 		if dif < o.Dif(){
 			dif = o.Dif()
-			ret = &o
+			ret = o
 		}
 	}
-	if ret == nil {
-		return &Opportunity{},errors.New("there is no os")
+	if len(*os)== 0 {
+		return Opportunity{},errors.New("there is no os")
 	}
 	return ret,nil
 }
@@ -53,6 +53,11 @@ type Opportunity struct {
 	b             string
 	bRate         float64
 	bCurrencyPair models.CurrencyPair
+	tradingAmount float64
+}
+
+func (o *Opportunity) TradingAmount() float64 {
+	return o.tradingAmount
 }
 
 func (o *Opportunity) Dif() float64 {

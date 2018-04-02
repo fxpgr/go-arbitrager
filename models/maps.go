@@ -190,7 +190,6 @@ func (sm *RateSyncMap) GetRate(exchange string, trading string, settlement strin
 	return rate, nil
 }
 
-
 func NewVolumeSyncMap() VolumeSyncMap {
 	return VolumeSyncMap{make(map[string]map[string]map[string]float64), new(sync.Mutex)}
 }
