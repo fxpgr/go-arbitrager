@@ -6,16 +6,12 @@ import (
 	"github.com/pkg/errors"
 )
 
-func NewOpportunity(exchangeA string, exchangeARate float64, exchangeACurrencyPair models.CurrencyPair,
-	exchangeB string, exchangeBRate float64, exchangeBCurrencyPair models.CurrencyPair) Opportunity {
-		return Opportunity{
-			a:             exchangeA,
-			aRate:         exchangeARate,
-			aCurrencyPair: exchangeACurrencyPair,
-			b:             exchangeB,
-			bRate:         exchangeBRate,
-			bCurrencyPair: exchangeBCurrencyPair,
-		}
+func NewOpportunity(buySide Side,sellSide Side, tradingAmount float64) Opportunity {
+	return Opportunity{
+		Buyside:buySide,
+		Sellside:sellSide,
+		tradingAmount: tradingAmount,
+	}
 }
 
 type Opportunities []Opportunity
@@ -46,13 +42,23 @@ func (os *Opportunities) HighestDifOpportunity() (Opportunity,error) {
 	return ret,nil
 }
 
+func NewSide(exchange string, rate float64, currencyPair models.CurrencyPair) Side {
+	return Side{
+		exchange:exchange,
+		rate:rate,
+		currencyPair:currencyPair,
+	}
+}
+
+type Side struct {
+	exchange string
+	rate float64
+	currencyPair models.CurrencyPair
+}
+
 type Opportunity struct {
-	a             string
-	aRate         float64
-	aCurrencyPair models.CurrencyPair
-	b             string
-	bRate         float64
-	bCurrencyPair models.CurrencyPair
+	Buyside  Side
+	Sellside Side
 	tradingAmount float64
 }
 
@@ -61,59 +67,39 @@ func (o *Opportunity) TradingAmount() float64 {
 }
 
 func (o *Opportunity) Dif() float64 {
-	if o.aRate > o.bRate {
-		return o.aRate / o.bRate
+	if o.Buyside.rate > o.Sellside.rate {
+		return o.Buyside.rate / o.Sellside.rate
 	}
-	return o.bRate/ o.aRate
+	return o.Sellside.rate/ o.Buyside.rate
 }
 
 func (o *Opportunity) BuySideRate() (rate float64) {
-	if o.BuySide()==o.a {
-		return o.aRate
-	}
-	return o.bRate
+	return o.Buyside.rate
 }
 
 func (o *Opportunity) SellSideRate() (rate float64) {
-	if o.SellSide()==o.a {
-		return o.aRate
-	}
-	return o.bRate
+	return o.Sellside.rate
 }
 
 func (o *Opportunity) BuySide() (exchange string) {
-	if o.aRate > o.bRate {
-		return o.b
-	}
-	return o.a
+	return o.Buyside.exchange
 }
 
 func (o *Opportunity) SellSide() (exchange string) {
-	if o.a == o.BuySide() {
-		return o.b
-	}
-	return o.a
+	return o.Sellside.exchange
 }
 
 func (o *Opportunity) BuySidePair() models.CurrencyPair {
-	if o.aRate > o.bRate {
-		return o.aCurrencyPair
-	}
-	return o.bCurrencyPair
+	return o.Buyside.currencyPair
 }
 
 func (o *Opportunity) SellSidePair() models.CurrencyPair {
-	if o.a == o.BuySide() {
-		return o.bCurrencyPair
-	}
-	return o.aCurrencyPair
+	return o.Sellside.currencyPair
 }
 
+
 func (o *Opportunity) IsDuplicated(opp *Opportunity) bool {
-	if o.a==opp.a&&o.aCurrencyPair == opp.aCurrencyPair &&o.b==opp.b&&o.bCurrencyPair==opp.bCurrencyPair {
-		return true
-	}
-	if o.a==opp.b&&o.aCurrencyPair == opp.bCurrencyPair &&o.b==opp.a&&o.bCurrencyPair==opp.aCurrencyPair {
+	if o == opp {
 		return true
 	}
 	return false

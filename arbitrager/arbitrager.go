@@ -14,6 +14,7 @@ import (
 	"github.com/fxpgr/go-arbitrager/logger"
 	"github.com/pkg/errors"
 	"github.com/fxpgr/go-arbitrager/config"
+	"strconv"
 )
 
 type Arbitrager interface {
@@ -157,148 +158,146 @@ func (a *simpleArbitrager) SwingArbitrage(position models.Position,o *models2.Op
 		logger.Get().Error(err)
 		return err
 	}
-	bestSellPrice:= buySideBoard.BestSellPrice()
-	bestBuyPrice:= sellSideBoard.BestBuyPrice()
-	logger.Get().Infof("[Arbitrage] target buy price %10f ",bestSellPrice)
-	logger.Get().Infof("[Arbitrage] target sell price %10f ",bestBuyPrice)
-	logSign :=fmt.Sprintf("%v-%v %v-%v %10f",o.BuySide(),o.SellSide(),o.BuySidePair().Trading,o.BuySidePair().Settlement,bestBuyPrice/bestSellPrice)
+	bestBuyPrice:= buySideBoard.BestAskPrice()
+	bestSellPrice:= sellSideBoard.BestBidPrice()
+	logSign :=fmt.Sprintf("%v-%v %v-%v %s",o.BuySide(),o.SellSide(),o.BuySidePair().Trading,o.BuySidePair().Settlement,strconv.FormatFloat(bestSellPrice/bestBuyPrice, 'f', 16, 64))
 	logger.Get().Infof("[Arbitrage] %v started",logSign)
-	phase := PHASE_SELL
-	if position == models.Long {
-		phase = PHASE_BUY
-	}
-	tradeFeeRate,err:= buySidePrivateClient.TradeFeeRate(o.BuySidePair().Trading,o.BuySidePair().Settlement)
-	if err !=nil {
-		logger.Get().Error(err)
-		return errors.New("failed to get trade fee rate")
-	}
-	orderFee := tradeFeeRate.TakerFee
-	var amount float64
+	logger.Get().Infof("[Arbitrage] detected arbitrage buy  price %s on %10s",strconv.FormatFloat(bestBuyPrice, 'f', 16, 64), o.BuySide())
+	logger.Get().Infof("[Arbitrage] detected arbitrage sell price %s on %10s",strconv.FormatFloat(bestSellPrice, 'f', 16, 64), o.SellSide())
+
 	var orderedAmount float64
-	var transferedAmount float64
-ArbitrageLoopOuter:
-	for{
-	ArbitrageLoop:
-		switch phase {
-		case PHASE_BUY:
-			logger.Get().Infof("[Arbitrage] %v phase_buy",logSign)
-			buyBoard, err := a.publicClient.Get(o.BuySide()).Board(o.BuySidePair().Trading, o.BuySidePair().Settlement)
-			if err != nil {
-				logger.Get().Error(err)
-				continue
-			}
-			bestBuyPrice:= buyBoard.BestBuyPrice()
-			amount = orderedAmount
-			if orderedAmount == 0 {
-				amount = o.TradingAmount()*(1-orderFee-0.0002)
-			}
-			orderNumber,err := buySidePrivateClient.Order(
-				o.BuySidePair().Trading,o.BuySidePair().Settlement,
-				models.Ask,bestSellPrice,amount)
-			if err != nil {
-				logger.Get().Error(err)
-				logger.Get().Error(amount)
-				logger.Get().Infof("order fee rate: %v", orderFee)
-				logger.Get().Infof("best buy price: %v", bestBuyPrice)
-				phase=INTERRUPTED
-				continue
-			}
-			logger.Get().Infof("[Arbitrage] order_number is %v",orderNumber)
-			orderTimeLimit := time.Now().Add(time.Minute*10)
-			fillCheckTicker := time.NewTicker(time.Second*3)
-			for{
-				select {
-				case <- fillCheckTicker.C:
-					isFilled,err:= buySidePrivateClient.IsOrderFilled(orderNumber,"")
-					if err != nil {
-						logger.Get().Error(err)
-						continue
-					}
-					if isFilled {
-						logger.Get().Infof("[Arbitrage] %v is filled",orderNumber)
-						orderedAmount = amount
-						phase = COMPLETED
-						if position == models.Long {
-							phase = PHASE_SELL
-						}
-						break  ArbitrageLoop
-					}
-					if !orderTimeLimit.After(time.Now())  {
-						err = buySidePrivateClient.CancelOrder(orderNumber,o.BuySidePair().Trading+"_"+o.BuySidePair().Settlement)
+	if position == models.Long {
+		phase := PHASE_BUY
+	LongLoop:
+		for {
+			switch phase {
+			case PHASE_BUY:
+				logger.Get().Infof("[Arbitrage] %v phase_buy", logSign)
+				buyBoard, err := a.publicClient.Get(o.BuySide()).Board(o.BuySidePair().Trading, o.BuySidePair().Settlement)
+				if err != nil {
+					logger.Get().Error(err)
+					phase = INTERRUPTED
+					continue
+				}
+				tradeFeeRate,err:= buySidePrivateClient.TradeFeeRate(o.BuySidePair().Trading,o.BuySidePair().Settlement)
+				if err !=nil {
+					logger.Get().Error(err)
+					phase = INTERRUPTED
+					continue
+				}
+				orderFee := tradeFeeRate.TakerFee
+				bestBuyPrice := buyBoard.BestAskPrice()
+				amount := o.TradingAmount() * (1 - orderFee - 0.0002)
+				logger.Get().Infof("[Arbitrage] buy price is %v", strconv.FormatFloat(bestBuyPrice, 'f', 16, 64))
+				orderNumber, err := buySidePrivateClient.Order(
+					o.BuySidePair().Trading, o.BuySidePair().Settlement,
+					models.Ask, bestBuyPrice, amount)
+				if err != nil {
+					logger.Get().Error(err)
+					logger.Get().Error(amount)
+					logger.Get().Infof("order fee rate: %v", orderFee)
+					logger.Get().Infof("best buy price: %v", bestBuyPrice)
+					phase = INTERRUPTED
+					continue
+				}
+				logger.Get().Infof("[Arbitrage] order_number is %v", orderNumber)
+				orderTimeLimit := time.Now().Add(time.Minute * 10)
+				fillCheckTicker := time.NewTicker(time.Second * 3)
+			PhaseBuyLoop:
+				for {
+					select {
+					case <-fillCheckTicker.C:
+						isFilled, err := buySidePrivateClient.IsOrderFilled(orderNumber, "")
 						if err != nil {
 							logger.Get().Error(err)
 							continue
 						}
-						phase = INTERRUPTED
-						break ArbitrageLoop
+						if isFilled {
+							logger.Get().Infof("[Arbitrage] %v is filled", orderNumber)
+							orderedAmount = amount
+							phase = PHASE_SELL
+							break PhaseBuyLoop
+						}
+						if !orderTimeLimit.After(time.Now()) {
+							err = buySidePrivateClient.CancelOrder(orderNumber, o.BuySidePair().Trading+"_"+o.BuySidePair().Settlement)
+							if err != nil {
+								logger.Get().Error(err)
+								continue
+							}
+							phase = INTERRUPTED
+							break PhaseBuyLoop
+						}
 					}
 				}
-			}
-		case PHASE_SELL:
-			logger.Get().Infof("[Arbitrage] %v phase_sell",logSign)
-			sellBoard, err := a.publicClient.Get(o.SellSide()).Board(o.SellSidePair().Trading, o.SellSidePair().Settlement)
-			if err != nil {
-				logger.Get().Error(err)
-				continue
-			}
-			bestSellPrice:= sellBoard.BestSellPrice()
+			case PHASE_SELL:
+				// if buyside price has reached at targetPrice
+				//
+				targetPrice := o.BuySideRate() * (1 + a.expectedProfitRate)
+				arbitrageTimeLimit := time.Now().Add(time.Minute * 240)
+				sellSideTradeFeeRate, err := buySidePrivateClient.TradeFeeRate(o.BuySidePair().Trading, o.BuySidePair().Settlement)
+				if err != nil {
+					logger.Get().Error(err)
+					continue
+				}
+				orderFee := sellSideTradeFeeRate.TakerFee
+				amount := orderedAmount * (1 - orderFee - 0.0002)
+				logger.Get().Infof("[Arbitrage] %v phase_sell", logSign)
+			PhaseSellLoop:
+				for {
 
-			sellSideTradeFeeRate,err:= sellSidePrivateClient.TradeFeeRate(o.SellSidePair().Trading,o.SellSidePair().Settlement)
-			if err !=nil {
-				logger.Get().Error(err)
-				continue
-			}
-			orderFee := sellSideTradeFeeRate.TakerFee
-			amount = orderedAmount
-			if orderedAmount == 0 {
-				amount = o.TradingAmount()*(1-orderFee-0.0002)
-			}
-			orderNumber,err := sellSidePrivateClient.Order(
-				o.SellSidePair().Trading,o.SellSidePair().Settlement,
-				models.Bid,bestSellPrice,amount)
-			if err != nil {
-				logger.Get().Error(err)
-				continue
-			}
-			orderTimeLimit := time.Now().Add(time.Minute*10)
-			fillCheckTicker := time.NewTicker(time.Second*3)
-			for{
-				select {
-				case <- fillCheckTicker.C:
-					isFilled,err:= sellSidePrivateClient.IsOrderFilled(orderNumber,"")
+					sellBoard, err := a.publicClient.Get(o.BuySide()).Board(o.BuySidePair().Trading, o.BuySidePair().Settlement)
 					if err != nil {
 						logger.Get().Error(err)
 						continue
 					}
-					if isFilled {
-						orderedAmount = amount
-						phase = COMPLETED
-						if position == models.Short {
-							phase = PHASE_SELL
-						}
-						break ArbitrageLoop
-					}
-					if !orderTimeLimit.After(time.Now())  {
-						err = sellSidePrivateClient.CancelOrder(orderNumber,o.SellSidePair().Trading+"_"+o.SellSidePair().Settlement)
+					bestSellPrice := sellBoard.BestBidPrice()
+					if targetPrice <= bestSellPrice || !arbitrageTimeLimit.After(time.Now()) {
+						logger.Get().Infof("[Arbitrage] sell price is %v", strconv.FormatFloat(bestSellPrice, 'f', 16, 64))
+						orderNumber, err := buySidePrivateClient.Order(
+							o.BuySidePair().Trading, o.BuySidePair().Settlement,
+							models.Bid, bestSellPrice, amount)
 						if err != nil {
+							logger.Get().Error(err)
 							continue
 						}
-						break ArbitrageLoop
+						orderTimeLimit := time.Now().Add(time.Minute * 10)
+						fillCheckTicker := time.NewTicker(time.Second * 3)
+						for {
+							select {
+							case <-fillCheckTicker.C:
+								isFilled, err := buySidePrivateClient.IsOrderFilled(orderNumber, "")
+								if err != nil {
+									logger.Get().Error(err)
+									continue
+								}
+								if isFilled {
+									orderedAmount = amount
+									phase = COMPLETED
+									break PhaseSellLoop
+								}
+								if !orderTimeLimit.After(time.Now()) {
+									err = sellSidePrivateClient.CancelOrder(orderNumber, o.SellSidePair().Trading+"_"+o.SellSidePair().Settlement)
+									if err != nil {
+										continue
+									}
+									break PhaseSellLoop
+								}
+							}
+						}
 					}
 				}
+			case INTERRUPTED:
+				logger.Get().Info("[Fail] failed to arbitrage ")
+				time.Sleep(time.Second * 3)
+				logger.Get().Info("[Restart] arbitrager")
+				phase = PHASE_BUY
+			case COMPLETED:
+				logger.Get().Infof("[Success] arbitrage completed.", )
+				break LongLoop
 			}
-		case RESTART:
-			logger.Get().Infof("[Arbitrage] %v phase_restart",logSign)
-			time.Sleep(time.Second*3)
-			phase = PHASE_BUY
-		case INTERRUPTED:
-			logger.Get().Info("[Fail] failed to arbitrage ")
-			break ArbitrageLoopOuter
-		case COMPLETED:
-			logger.Get().Infof("[Success] arbitrage completed. you got %10f",transferedAmount-amount)
-			break ArbitrageLoopOuter
 		}
 	}
+
 	return nil
 }
 
@@ -335,8 +334,8 @@ func (a *simpleArbitrager) Inspect(o models2.Opportunity) (error) {
 			logger.Get().Error(err)
 			return
 		}
-		buyRate:= buyBoard.BestBuyPrice()
-		sellRate:= sellBoard.BestSellPrice()
+		buyRate:= buyBoard.BestBidPrice()
+		sellRate:= sellBoard.BestAskPrice()
 		if buyRate==0 ||sellRate==0 {
 			logger.Get().Error("[Result] got 0 board rate in opportunity verify tracing")
 			return
@@ -478,36 +477,36 @@ func (a *simpleArbitrager) Opportunities() (opps models2.Opportunities, err erro
 				//logger.Get().Error(err)
 				return
 			}
-			aBestBuyPrice := aBoard.BestBuyPrice()
-			aBestSellPrice:= aBoard.BestSellPrice()
-			bBestBuyPrice := bBoard.BestBuyPrice() // Bid = you can buy
-			bBestSellPrice := bBoard.BestSellPrice() // Ask = you can sell
-			if bBestSellPrice/aBestBuyPrice > 1+a.expectedProfitRate {
-				spread := bBestSellPrice - aBestBuyPrice
-				tradeAmount := math.Min(aBoard.BestBuyAmount(), bBoard.BestSellAmount())
+			aBestBidPrice := aBoard.BestBidPrice()
+			aBestAskPrice:= aBoard.BestAskPrice()
+			bBestBidPrice := bBoard.BestBidPrice() // Bid = you can buy
+			bBestAskPrice := bBoard.BestAskPrice() // Ask = you can sell
+			if bBestBidPrice/aBestAskPrice > 1+a.expectedProfitRate {
+				spread := bBestBidPrice - aBestAskPrice
+				tradeAmount := math.Min(aBoard.BestBidAmount(), bBoard.BestAskAmount())
 				logger.Get().Infof("--------------------Opportunity--------------------")
 				logger.Get().Infof("%v-%v %v-%v", arbPair.a.exchange, arbPair.b.exchange, arbPair.a.pair.Trading, arbPair.a.pair.Settlement)
-				logger.Get().Infof("Best Bid       : %16s %10f", arbPair.b.exchange, bBestSellPrice)
-				logger.Get().Infof("Best Ask       : %16s %10f", arbPair.a.exchange, aBestBuyPrice)
-				logger.Get().Infof("Spread         : %16f", spread)
-				logger.Get().Infof("SpreadRate     : %16f", bBestSellPrice/aBestBuyPrice )
+				logger.Get().Infof("Best Ask       : %16s %v", arbPair.a.exchange, strconv.FormatFloat(aBestAskPrice, 'f', 16, 64))
+				logger.Get().Infof("Best Bid       : %16s %v", arbPair.b.exchange, strconv.FormatFloat(bBestBidPrice, 'f', 16, 64))
+				logger.Get().Infof("Spread         : %16s %v", "",strconv.FormatFloat(spread, 'f', 16, 64))
+				logger.Get().Infof("SpreadRate     : %16f", bBestBidPrice/aBestAskPrice )
 				logger.Get().Infof("ExpectedProfit : %16f %v", spread*tradeAmount, arbPair.a.pair.Trading)
 				logger.Get().Infof("---------------------------------------------------")
-				o := models2.NewOpportunity(arbPair.a.exchange, aBestBuyPrice, arbPair.a.pair,arbPair.b.exchange, bBestSellPrice, arbPair.b.pair)
+				o := models2.NewOpportunity(models2.NewSide(arbPair.a.exchange, aBestBidPrice, arbPair.a.pair),models2.NewSide(arbPair.b.exchange, bBestAskPrice, arbPair.b.pair), tradeAmount)
 				opps = append(opps, o)
 
-			} else if aBestSellPrice / bBestBuyPrice > 1+a.expectedProfitRate  {
-				spread := aBestSellPrice - bBestBuyPrice
-				tradeAmount := math.Min(bBoard.BestBuyAmount(),aBoard.BestSellAmount())
+			} else if aBestBidPrice / bBestAskPrice > 1+a.expectedProfitRate  {
+				spread := aBestBidPrice - bBestAskPrice
+				tradeAmount := math.Min(bBoard.BestBidAmount(),aBoard.BestAskAmount())
 				logger.Get().Infof("--------------------Opportunity--------------------")
 				logger.Get().Infof("%v-%v %v-%v",arbPair.a.exchange,arbPair.b.exchange, arbPair.a.pair.Trading, arbPair.a.pair.Settlement)
-				logger.Get().Infof("Best Bid       : %16s %10f",arbPair.a.exchange, aBestSellPrice)
-				logger.Get().Infof("Best Ask       : %16s %10f",arbPair.b.exchange, bBestBuyPrice)
-				logger.Get().Infof("Spread         : %16f",spread)
-				logger.Get().Infof("SpreadRate     : %16f", aBestSellPrice / bBestBuyPrice )
+				logger.Get().Infof("Best Bid       : %16s %v",arbPair.a.exchange, strconv.FormatFloat(aBestBidPrice, 'f', 16, 64))
+				logger.Get().Infof("Best Ask       : %16s %v",arbPair.b.exchange, strconv.FormatFloat(bBestAskPrice, 'f', 16, 64))
+				logger.Get().Infof("Spread         : %16s %v","", strconv.FormatFloat(spread, 'f', 16, 64))
+				logger.Get().Infof("SpreadRate     : %16f", aBestBidPrice / bBestAskPrice )
 				logger.Get().Infof("ExpectedProfit : %16f %v",spread*tradeAmount,arbPair.a.pair.Trading)
 				logger.Get().Infof("---------------------------------------------------")
-				o := models2.NewOpportunity(arbPair.a.exchange, aBestSellPrice, arbPair.a.pair,arbPair.b.exchange, bBestBuyPrice, arbPair.b.pair)
+				o := models2.NewOpportunity(models2.NewSide(arbPair.b.exchange, bBestAskPrice, arbPair.b.pair),models2.NewSide(arbPair.a.exchange, aBestBidPrice, arbPair.a.pair), tradeAmount)
 				opps = append(opps, o)
 			}
 			<-workers

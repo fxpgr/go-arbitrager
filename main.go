@@ -55,7 +55,6 @@ func main() {
 						logger.Get().Error(err)
 						continue
 					}
-					fmt.Println(len(opps))
 					o, err := opps.HighestDifOpportunity()
 					if err != nil {
 						logger.Get().Error(err)
