@@ -24,7 +24,7 @@ type Arbitrager interface {
 	SyncRate() error
 	CancelWatchRate()
 	Inspect(models2.Opportunity) (error)
-	SwingArbitrage(position models.Position, o *models2.Opportunity)(error)
+	SingleLegArbitrage(position models.Position, o *models2.Opportunity)(error)
 }
 
 type exchangeCurrencyPair struct {
@@ -143,7 +143,7 @@ const(
 	END
 )
 
-func (a *simpleArbitrager) SwingArbitrage(position models.Position,o *models2.Opportunity)(error) {
+func (a *simpleArbitrager) SingleLegArbitrage(position models.Position,o *models2.Opportunity)(error) {
 	buySidePublicClient := a.publicClient.Get(o.BuySide())
 	buySidePrivateClient := a.privateClient.Get(o.BuySide())
 	sellSidePublicClient := a.publicClient.Get(o.SellSide())
@@ -271,6 +271,14 @@ func (a *simpleArbitrager) SwingArbitrage(position models.Position,o *models2.Op
 									continue
 								}
 								if isFilled {
+									logger.Get().Infof("[Arbitrage] sell is filled %v", orderNumber)
+									sellBoard, err := a.publicClient.Get(o.SellSide()).Board(o.SellSidePair().Trading, o.SellSidePair().Settlement)
+									if err != nil {
+										logger.Get().Error(err)
+										continue
+									}
+									bestSellPrice := sellBoard.BestBidPrice()
+									logger.Get().Infof("[Arbitrage] sell price is %v on %v", strconv.FormatFloat(bestSellPrice, 'f', 16, 64), o.SellSide())
 									orderedAmount = amount
 									phase = COMPLETED
 									break PhaseSellLoop

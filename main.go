@@ -60,7 +60,7 @@ func main() {
 						logger.Get().Error(err)
 						continue
 					}
-					err = simpleArbitrager.SwingArbitrage(models.Long, &o)
+					err = simpleArbitrager.SingleLegArbitrage(models.Long, &o)
 					if err != nil {
 						logger.Get().Error(err)
 						continue
