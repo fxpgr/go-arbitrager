@@ -8,7 +8,6 @@ import (
 	"github.com/urfave/cli"
 	"github.com/fxpgr/go-arbitrager/arbitrager"
 	"github.com/fxpgr/go-exchange-client/api/private"
-	"github.com/fxpgr/go-exchange-client/models"
 )
 
 func help_and_exit() {
@@ -55,17 +54,19 @@ func main() {
 						logger.Get().Error(err)
 						continue
 					}
-					o, err := opps.HighestDifOpportunity()
-					if err != nil {
-						logger.Get().Error(err)
-						continue
-					}
-					err = simpleArbitrager.SingleLegArbitrage(models.Long, &o)
+
+					_, err = opps.HighestDifOpportunity()
 					if err != nil {
 						logger.Get().Error(err)
 						continue
 					}
 					/*
+					err = simpleArbitrager.SingleLegArbitrage(models.Long, &o)
+					if err != nil {
+						logger.Get().Error(err)
+						continue
+					}
+
 					filterdO,err := opportunities.BuySideFilter("hitbtc")
 					if err != nil {
 						logger.Get().Error(err)
@@ -80,7 +81,8 @@ func main() {
 					if err != nil {
 						logger.Get().Error(err)
 						continue
-					}*/
+					}
+					*/
 				}
 			}
 		}

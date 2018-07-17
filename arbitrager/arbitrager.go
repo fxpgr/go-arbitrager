@@ -15,6 +15,10 @@ import (
 	"github.com/pkg/errors"
 	"github.com/fxpgr/go-arbitrager/config"
 	"strconv"
+	"github.com/fxpgr/go-arbitrager/repositories"
+	"github.com/fxpgr/go-arbitrager/services"
+	"gopkg.in/mgo.v2"
+	"gopkg.in/mgo.v2/bson"
 )
 
 type Arbitrager interface {
@@ -75,6 +79,8 @@ func(ra *runningArbitragePairs) Exists(pair arbitragePair) bool {
 type simpleArbitrager struct {
 	configPath string
 
+	historyRepository services.HistoryRepository
+
 	frozenCurrency models2.FrozenCurrencySyncMap
 	exchangeSymbol models2.ExchangeSymbolSyncMap
 	publicClient   models2.PublicClientSyncMap
@@ -92,8 +98,12 @@ type simpleArbitrager struct {
 }
 
 func NewSimpleArbitrager(confPath string,expectedProfitRate float64) Arbitrager {
+	session, _ := mgo.Dial("mongo:27017")
 	return &simpleArbitrager{
 		configPath:confPath,
+		historyRepository:      &repositories.HistoryRepositoryMgo{
+			DB:session.DB("arbitrager"),
+		},
 		frozenCurrency:         models2.NewFrozenCurrencySyncMap(),
 		exchangeSymbol:         models2.NewExchangeSymbolSyncMap(),
 		publicClient:           models2.NewPublicClientSyncMap(),
@@ -502,7 +512,19 @@ func (a *simpleArbitrager) Opportunities() (opps models2.Opportunities, err erro
 				logger.Get().Infof("---------------------------------------------------")
 				o := models2.NewOpportunity(models2.NewSide(arbPair.a.exchange, aBestBidPrice, arbPair.a.pair),models2.NewSide(arbPair.b.exchange, bBestAskPrice, arbPair.b.pair), tradeAmount)
 				opps = append(opps, o)
-
+				err = a.historyRepository.Create(&models2.History{
+					ID: bson.NewObjectId(),
+					DateTime:time.Now(),
+					SellSide:o.SellSide(),
+					SellRate:o.SellSideRate(),
+					BuySide:o.BuySide(),
+					BuyRate: o.BuySideRate(),
+					CurrencyPair: o.BuySidePair().Trading +"_"+ o.BuySidePair().Settlement,
+					Amount:tradeAmount,
+				})
+				if err != nil {
+					logger.Get().Error(err)
+				}
 			} else if aBestBidPrice / bBestAskPrice > 1+a.expectedProfitRate  {
 				spread := aBestBidPrice - bBestAskPrice
 				tradeAmount := math.Min(bBoard.BestBidAmount(),aBoard.BestAskAmount())
@@ -516,7 +538,21 @@ func (a *simpleArbitrager) Opportunities() (opps models2.Opportunities, err erro
 				logger.Get().Infof("---------------------------------------------------")
 				o := models2.NewOpportunity(models2.NewSide(arbPair.b.exchange, bBestAskPrice, arbPair.b.pair),models2.NewSide(arbPair.a.exchange, aBestBidPrice, arbPair.a.pair), tradeAmount)
 				opps = append(opps, o)
+				err = a.historyRepository.Create(&models2.History{
+					ID: bson.NewObjectId(),
+					DateTime:time.Now(),
+					SellSide:o.SellSide(),
+					SellRate:o.SellSideRate(),
+					BuySide:o.BuySide(),
+					BuyRate: o.BuySideRate(),
+					CurrencyPair: o.BuySidePair().Trading +"_"+ o.BuySidePair().Settlement,
+					Amount:tradeAmount,
+				})
+				if err != nil {
+					logger.Get().Error(err)
+				}
 			}
+
 			<-workers
 		}(arbPair)
 	}

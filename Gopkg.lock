@@ -2,89 +2,111 @@
 
 
 [[projects]]
+  digest = "1:cf84c1cf34b76875b25f45cbffd95ca409cdf370473a6caa078abc16db06484a"
   name = "github.com/Jeffail/gabs"
   packages = ["."]
-  revision = "2a3aa15961d5fee6047b8151b67ac2f08ba2c48c"
-  version = "1.0"
+  pruneopts = "UT"
+  revision = "7a0fed31069aba77993a518cc2f37b28ee7aa883"
+  version = "1.1"
 
 [[projects]]
+  digest = "1:e49fec8537ec021eeb41d394684bce0365c8db14c8099215f7b509189ddb5852"
   name = "github.com/antonholmquist/jason"
   packages = ["."]
+  pruneopts = "UT"
   revision = "c23cef7eaa75a6a5b8810120e167bd590d8fd2ab"
   version = "v1.0.0"
 
 [[projects]]
+  digest = "1:a2c1d0e43bd3baaa071d1b9ed72c27d78169b2b269f71c105ac4ba34b1be4a39"
+  name = "github.com/davecgh/go-spew"
+  packages = ["spew"]
+  pruneopts = "UT"
+  revision = "346938d642f2ec3594ed81d874461961cd0faa76"
+  version = "v1.1.0"
+
+[[projects]]
   branch = "master"
+  digest = "1:e70d03325eaa9e9fefaa0a05f270afe1e9fb63e2a64231549934bd325a023f70"
   name = "github.com/fxpgr/go-exchange-client"
   packages = [
     "api/private",
     "api/public",
     "logger",
-    "models"
+    "models",
   ]
-  revision = "fa54925493ab792787c0b88e45ae09f14d3fa8d1"
-
-[[projects]]
-  name = "github.com/gizak/termui"
-  packages = ["."]
-  revision = "24acd523c756fd9728824cdfac66aad9d8982fb7"
-  version = "v2.2.0"
+  pruneopts = "UT"
+  revision = "3f0899a4ab7fa74ebc2463908eecd886fbd16ebd"
 
 [[projects]]
   branch = "master"
+  digest = "1:8f431a5baf01145d778c0a68df4f61240469b871daeb8e997221aceb157f5943"
   name = "github.com/kokardy/listing"
   packages = ["."]
+  pruneopts = "UT"
   revision = "795534c33c5ab6be8b85a15951664ab11fb70ea7"
 
 [[projects]]
-  name = "github.com/maruel/panicparse"
-  packages = ["stack"]
-  revision = "785840568bdc7faa0dfb1cd6c643207f03271f64"
-  version = "v1.1.1"
-
-[[projects]]
-  name = "github.com/mattn/go-runewidth"
-  packages = ["."]
-  revision = "9e777a8366cce605130a531d2cd6363d07ad7317"
-  version = "v0.0.2"
-
-[[projects]]
-  branch = "master"
-  name = "github.com/mitchellh/go-wordwrap"
-  packages = ["."]
-  revision = "ad45545899c7b13c020ea92b2072220eefad42b8"
-
-[[projects]]
-  branch = "master"
-  name = "github.com/nsf/termbox-go"
-  packages = ["."]
-  revision = "e2050e41c8847748ec5288741c0b19a8cb26d084"
-
-[[projects]]
+  digest = "1:40e195917a951a8bf867cd05de2a46aaf1806c50cf92eebf4c16f78cd196f747"
   name = "github.com/pkg/errors"
   packages = ["."]
+  pruneopts = "UT"
   revision = "645ef00459ed84a119197bfb8d8205042c6df63d"
   version = "v0.8.0"
 
 [[projects]]
+  digest = "1:0028cb19b2e4c3112225cd871870f2d9cf49b9b4276531f03438a88e94be86fe"
+  name = "github.com/pmezard/go-difflib"
+  packages = ["difflib"]
+  pruneopts = "UT"
+  revision = "792786c7400a136282c1664665ae0a8db921c6c2"
+  version = "v1.0.0"
+
+[[projects]]
+  digest = "1:ac83cf90d08b63ad5f7e020ef480d319ae890c208f8524622a2f3136e2686b02"
+  name = "github.com/stretchr/objx"
+  packages = ["."]
+  pruneopts = "UT"
+  revision = "477a77ecc69700c7cdeb1fa9e129548e1c1c393c"
+  version = "v0.1.1"
+
+[[projects]]
+  digest = "1:1f5ea8411b6304b61488d343f038f05efc287207bdee65e410a9c0d4f0e7d8c6"
+  name = "github.com/stretchr/testify"
+  packages = [
+    "assert",
+    "mock",
+  ]
+  pruneopts = "UT"
+  revision = "f35b8ab0b5a2cef36673838d662e249dd9c94686"
+  version = "v1.2.2"
+
+[[projects]]
+  digest = "1:b24d38b282bacf9791408a080f606370efa3d364e4b5fd9ba0f7b87786d3b679"
   name = "github.com/urfave/cli"
   packages = ["."]
+  pruneopts = "UT"
   revision = "cfb38830724cc34fedffe9a2a29fb54fa9169cd1"
   version = "v1.20.0"
 
 [[projects]]
+  digest = "1:777e729b475d3895c7229552aa10076f0d177daf37c0a72258006d046d329960"
   name = "go.uber.org/atomic"
   packages = ["."]
+  pruneopts = "UT"
   revision = "4e336646b2ef9fc6e47be8e21594178f98e5ebcf"
   version = "v1.2.0"
 
 [[projects]]
+  digest = "1:60bf2a5e347af463c42ed31a493d817f8a72f102543060ed992754e689805d1a"
   name = "go.uber.org/multierr"
   packages = ["."]
+  pruneopts = "UT"
   revision = "3c4937480c32f4c13a875a1829af76c98ca3d40a"
   version = "v1.1.0"
 
 [[projects]]
+  digest = "1:e6d865f90ef1178c14bdb49ea9f244bfcb28c06ea9773dc077492032632de0b8"
   name = "go.uber.org/zap"
   packages = [
     ".",
@@ -92,20 +114,48 @@
     "internal/bufferpool",
     "internal/color",
     "internal/exit",
-    "zapcore"
+    "zapcore",
   ]
-  revision = "35aad584952c3e7020db7b839f6b102de6271f89"
-  version = "v1.7.1"
+  pruneopts = "UT"
+  revision = "eeedf312bc6c57391d84767a4cd413f02a917974"
+  version = "v1.8.0"
 
 [[projects]]
+  branch = "v2"
+  digest = "1:29bf5c8251ed1689ddb48fa672d6154694cd4a43975e69f151507e67071e3741"
+  name = "gopkg.in/mgo.v2"
+  packages = [
+    ".",
+    "bson",
+    "internal/json",
+    "internal/sasl",
+    "internal/scram",
+  ]
+  pruneopts = "UT"
+  revision = "9856a29383ce1c59f308dd1cf0363a79b5bef6b5"
+
+[[projects]]
+  digest = "1:342378ac4dcb378a5448dd723f0784ae519383532f5e70ade24132c4c8693202"
   name = "gopkg.in/yaml.v2"
   packages = ["."]
-  revision = "7f97868eec74b32b0982dd158a51a446d1da7eb5"
-  version = "v2.1.1"
+  pruneopts = "UT"
+  revision = "5420a8b6744d3b0345ab293f6fcba19c978f1183"
+  version = "v2.2.1"
 
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "150f41c8d0042d768f63cdd3e479cd8e810ccad9511d8b1641921f39c6341081"
+  input-imports = [
+    "github.com/fxpgr/go-exchange-client/api/private",
+    "github.com/fxpgr/go-exchange-client/api/public",
+    "github.com/fxpgr/go-exchange-client/models",
+    "github.com/kokardy/listing",
+    "github.com/pkg/errors",
+    "github.com/urfave/cli",
+    "go.uber.org/zap",
+    "gopkg.in/mgo.v2",
+    "gopkg.in/mgo.v2/bson",
+    "gopkg.in/yaml.v2",
+  ]
   solver-name = "gps-cdcl"
   solver-version = 1

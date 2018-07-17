@@ -1,4 +1,4 @@
-FROM golang:1.9
+FROM golang:1.10
 
 ENV GOBIN /go/bin
 RUN mkdir -p /go/src/github.com/fxpgr/go-arbitrager

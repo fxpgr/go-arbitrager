@@ -56,6 +56,7 @@ type Side struct {
 	currencyPair models.CurrencyPair
 }
 
+
 type Opportunity struct {
 	Buyside  Side
 	Sellside Side

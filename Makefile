@@ -2,7 +2,7 @@ build:
 	docker build . -t go-arbitrager
 
 run:
-	docker run -it --rm --name arbitrager go-arbitrager go-arbitrager
+    docker-compose up -d
 
-run-cui:
-	docker run -it --rm --name arbitrager go-arbitrager go-arbitrager -c config.yml -m cui
+stop:
+    docker-compose stop

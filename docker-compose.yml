@@ -1,0 +1,24 @@
+version: '2'
+services:
+  arbitrager:
+    image: go-arbitrager
+    command: go-arbitrager
+    depends_on:
+      - mongo
+    restart: always
+  web:
+    image: metabase/metabase
+    ports:
+      - "3000:3000"
+    depends_on:
+      - mongo
+    restart: always
+  mongo:
+    restart: always
+    image: mongo
+    volumes:
+      - mongodb_arbitrager:/data/db
+    ports:
+      - '27017:27017'
+volumes:
+  mongodb_arbitrager:
