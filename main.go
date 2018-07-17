@@ -37,7 +37,7 @@ func main() {
 			fmt.Println("not implemented")
 
 		}else{
-			simpleArbitrager := arbitrager.NewSimpleArbitrager(configPath,0.01)
+			simpleArbitrager := arbitrager.NewSimpleArbitrager(configPath,-0.1)
 			err := simpleArbitrager.RegisterExchanges(private.TEST, []string{"poloniex", "hitbtc", "huobi"})
 			if err != nil {
 				panic(err)
