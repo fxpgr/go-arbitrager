@@ -17,8 +17,8 @@ func Get() *zap.SugaredLogger {
 
 	if logger == nil {
 		cfg := zap.NewDevelopmentConfig()
-		cfg.OutputPaths = []string{"stdout","./logger.log"}
-		lg,err := cfg.Build()
+		cfg.OutputPaths = []string{"stdout", "./logger.log"}
+		lg, err := cfg.Build()
 		if err != nil {
 			panic(err)
 		}

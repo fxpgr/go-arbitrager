@@ -1,61 +1,15 @@
-package models
+package entity
 
 import (
-	"sync"
-	"github.com/fxpgr/go-exchange-client/models"
-	"github.com/fxpgr/go-exchange-client/api/public"
 	"github.com/fxpgr/go-exchange-client/api/private"
+	"github.com/fxpgr/go-exchange-client/api/public"
+	"github.com/fxpgr/go-exchange-client/models"
 	"github.com/pkg/errors"
-	"time"
+	"sync"
 )
 
-func NewVerifyTracerSyncSlice() VerifyTracerSyncSlice {
-	return VerifyTracerSyncSlice{make([]*VerifyTracer,0),new(sync.Mutex)}
-}
-
-
-type VerifyTracer struct {
-	DateTime time.Time
-	TargetTime time.Time
-	Opportunity Opportunity
-}
-
-type VerifyTracerSyncSlice struct {
-	verifyTracers []*VerifyTracer
-	m *sync.Mutex
-}
-
-func (ss *VerifyTracerSyncSlice) Set(tracer *VerifyTracer) {
-	ss.m.Lock()
-	defer ss.m.Unlock()
-	ss.verifyTracers= append(ss.verifyTracers,tracer)
-}
-
-func (ss *VerifyTracerSyncSlice) Remove(tracer *VerifyTracer) {
-	ss.m.Lock()
-	defer ss.m.Unlock()
-	vt := make([]*VerifyTracer,0)
-	for _,v := range ss.verifyTracers {
-		if !v.Opportunity.IsDuplicated(&tracer.Opportunity) {
-			vt = append(vt,v)
-		}
-	}
-	ss.verifyTracers = vt
-}
-
-func (ss *VerifyTracerSyncSlice) IsDuplicated(o *Opportunity) bool {
-	ss.m.Lock()
-	defer ss.m.Unlock()
-	for _,v := range ss.verifyTracers{
-		if v.Opportunity.IsDuplicated(o){
-			return true
-		}
-	}
-	return false
-}
-
-func NewFrozenCurrencySyncMap() FrozenCurrencySyncMap {
-	return FrozenCurrencySyncMap{make(map[string][]string), new(sync.Mutex)}
+func NewFrozenCurrencySyncMap() *FrozenCurrencySyncMap {
+	return &FrozenCurrencySyncMap{make(map[string][]string), new(sync.Mutex)}
 }
 
 type frozenCurrencyMap map[string][]string
@@ -82,8 +36,8 @@ func (sm *FrozenCurrencySyncMap) GetAll() map[string][]string {
 	return sm.frozenCurrencyMap
 }
 
-func NewExchangeSymbolSyncMap() ExchangeSymbolSyncMap {
-	return ExchangeSymbolSyncMap{make(map[string][]models.CurrencyPair), new(sync.Mutex)}
+func NewExchangeSymbolSyncMap() *ExchangeSymbolSyncMap {
+	return &ExchangeSymbolSyncMap{make(map[string][]models.CurrencyPair), new(sync.Mutex)}
 }
 
 type exchangeSymbolMap map[string][]models.CurrencyPair
@@ -110,8 +64,8 @@ func (sm *ExchangeSymbolSyncMap) GetAll() map[string][]models.CurrencyPair {
 	return sm.exchangeSymbolMap
 }
 
-func NewPublicClientSyncMap() PublicClientSyncMap {
-	return PublicClientSyncMap{make(map[string]public.PublicClient), new(sync.Mutex)}
+func NewPublicClientSyncMap() *PublicClientSyncMap {
+	return &PublicClientSyncMap{make(map[string]public.PublicClient), new(sync.Mutex)}
 }
 
 type publicClientMap map[string]public.PublicClient
@@ -138,10 +92,9 @@ func (sm *PublicClientSyncMap) Set(exchange string, cli public.PublicClient) {
 	sm.publicClientMap[exchange] = cli
 }
 
-func NewPrivateClientSyncMap() PrivateClientSyncMap {
-	return PrivateClientSyncMap{make(map[string]private.PrivateClient), new(sync.Mutex)}
+func NewPrivateClientSyncMap() *PrivateClientSyncMap {
+	return &PrivateClientSyncMap{make(map[string]private.PrivateClient), new(sync.Mutex)}
 }
-
 
 type privateClientMap map[string]private.PrivateClient
 
@@ -163,8 +116,8 @@ func (sm *PrivateClientSyncMap) Set(exchange string, cli private.PrivateClient) 
 	sm.privateClientMap[exchange] = cli
 }
 
-func NewRateSyncMap() RateSyncMap {
-	return RateSyncMap{make(map[string]map[string]map[string]float64), new(sync.Mutex)}
+func NewRateSyncMap() *RateSyncMap {
+	return &RateSyncMap{make(map[string]map[string]map[string]float64), new(sync.Mutex)}
 }
 
 type rateMap map[string]map[string]map[string]float64
@@ -190,9 +143,10 @@ func (sm *RateSyncMap) GetRate(exchange string, trading string, settlement strin
 	return rate, nil
 }
 
-func NewVolumeSyncMap() VolumeSyncMap {
-	return VolumeSyncMap{make(map[string]map[string]map[string]float64), new(sync.Mutex)}
+func NewVolumeSyncMap() *VolumeSyncMap {
+	return &VolumeSyncMap{make(map[string]map[string]map[string]float64), new(sync.Mutex)}
 }
+
 type volumeMap map[string]map[string]map[string]float64
 
 type VolumeSyncMap struct {
