@@ -2,6 +2,7 @@ package usecase
 
 import (
 	"context"
+	"fmt"
 	"github.com/fxpgr/go-arbitrager/domain/entity"
 	"github.com/fxpgr/go-arbitrager/domain/repository"
 	"github.com/fxpgr/go-arbitrager/infrastructure/logger"
@@ -9,13 +10,26 @@ import (
 	"github.com/fxpgr/go-exchange-client/models"
 	"github.com/kokardy/listing"
 	"gopkg.in/mgo.v2"
-	"math"
 	"sync"
 	"time"
 )
 
 func DisabledCurrencies() []string {
-	return []string {"BTM"}
+	return []string{"BTM", "DCN"}
+}
+
+type TriangleScanner struct {
+	MessageRepository         repository.MessageRepository         `inject:""`
+	HistoryRepository         repository.HistoryRepository         `inject:""`
+	PublicResourceRepository  repository.PublicResourceRepository  `inject:""`
+	PrivateResourceRepository repository.PrivateResourceRepository `inject:""`
+	FrozenCurrency            *entity.FrozenCurrencySyncMap        `inject:""`
+	ExchangeSymbol            *entity.ExchangeSymbolSyncMap        `inject:""`
+	RateMap                   *entity.RateSyncMap                  `inject:""`
+	VolumeMap                 *entity.VolumeSyncMap                `inject:""`
+	ArbitragePairs            *ArbitragePairs                      `inject:""`
+	TriangleArbitrageTriples  *TriangleArbitrageTriples            `inject:""`
+	cancelFunc                context.CancelFunc
 }
 
 type exchangeCurrencyPair struct {
@@ -32,8 +46,30 @@ type ArbitragePairs struct {
 	pairs []ArbitragePair
 }
 
+func (a *ArbitragePairs) Get() []ArbitragePair {
+	return a.pairs
+}
+
+type TriangleArbitrageTriple struct {
+	a              exchangeCurrencyPair
+	b              exchangeCurrencyPair
+	intermediaPair exchangeCurrencyPair
+}
+
+type TriangleArbitrageTriples struct {
+	triples []TriangleArbitrageTriple
+}
+
+func (a *TriangleArbitrageTriples) Get() []TriangleArbitrageTriple {
+	return a.triples
+}
+
 func NewArbitragePairs() *ArbitragePairs {
 	return &ArbitragePairs{make([]ArbitragePair, 0)}
+}
+
+func NewTriangleArbitrageTriples() *TriangleArbitrageTriples {
+	return &TriangleArbitrageTriples{make([]TriangleArbitrageTriple, 0)}
 }
 
 type Scanner struct {
@@ -46,6 +82,7 @@ type Scanner struct {
 	RateMap                   *entity.RateSyncMap                  `inject:""`
 	VolumeMap                 *entity.VolumeSyncMap                `inject:""`
 	ArbitragePairs            *ArbitragePairs                      `inject:""`
+	TriangleArbitrageTriples  *TriangleArbitrageTriples            `inject:""`
 	cancelFunc                context.CancelFunc
 }
 
@@ -112,7 +149,7 @@ func (s *Scanner) SyncRate(exchanges []string) error {
 			logger.Get().Debugf("rate sync %v", exchange)
 			RateMap, err := s.PublicResourceRepository.RateMap(exchange)
 			if err != nil {
-				logger.Get().Errorf("currency pair rate watcher faced error: %v %v",exchange, err)
+				logger.Get().Errorf("currency pair rate watcher faced error: %v %v", exchange, err)
 			}
 			s.RateMap.Set(exchange, RateMap)
 			VolumeMap, err := s.PublicResourceRepository.VolumeMap(exchange)
@@ -128,11 +165,11 @@ func (s *Scanner) SyncRate(exchanges []string) error {
 }
 
 func (s *Scanner) FilterCurrency(currencies []string) error {
-	ps:= make([]ArbitragePair,0)
-	for _,p := range s.ArbitragePairs.pairs {
+	ps := make([]ArbitragePair, 0)
+	for _, p := range s.ArbitragePairs.pairs {
 		isIncluded := false
-		for _,c := range currencies {
-			if p.a.pair.Settlement == c || p.a.pair.Trading ==c {
+		for _, c := range currencies {
+			if p.a.pair.Settlement == c || p.a.pair.Trading == c {
 				isIncluded = true
 			}
 		}
@@ -141,8 +178,249 @@ func (s *Scanner) FilterCurrency(currencies []string) error {
 		}
 	}
 	s.ArbitragePairs.pairs = ps
-	logger.Get().Infof("[Scanner] %v currency pairs registered after filtering", len(s.ArbitragePairs.pairs))
+	s.MessageRepository.Send(fmt.Sprintf("[Scanner] %d currency pairs registered after filtering", len(s.ArbitragePairs.pairs)))
 	return nil
+}
+
+func (s *Scanner) RegisterTrianglePairs(exchanges []string) error {
+	logger.Get().Debug("exchanges are being registered")
+	for _, e := range exchanges {
+		pairs, err := s.PublicResourceRepository.CurrencyPairs(e)
+		if err != nil {
+			logger.Get().Errorf("failed to get currency pairs on exchange %v", e)
+			return err
+		}
+
+		s.ExchangeSymbol.Set(e, pairs)
+		FrozenCurrency, err := s.PublicResourceRepository.FrozenCurrency(e)
+		if err != nil {
+			logger.Get().Errorf("failed to get frozen currencies on exchange %v", e)
+			return err
+		}
+
+		s.FrozenCurrency.Set(e, FrozenCurrency)
+		currencyPairs := s.ExchangeSymbol.Get(e)
+		settlementsMap := make(map[string][]string, 0)
+		var settlements []string
+		for _, c := range currencyPairs {
+			isDisable := false
+			for _, fc := range s.FrozenCurrency.Get(e) {
+				if c.Trading == fc || c.Settlement == fc {
+					isDisable = true
+				}
+			}
+			for _, dc := range DisabledCurrencies() {
+				if c.Trading == dc || c.Settlement == dc {
+					isDisable = true
+				}
+			}
+			if isDisable {
+				continue
+			}
+			settlementsMap[c.Settlement] = append(settlementsMap[c.Settlement], c.Trading)
+		}
+		for k := range settlementsMap {
+			settlements = append(settlements, k)
+		}
+		pibotCurrencyPairs := make([]models.CurrencyPair, 0)
+		for _, s := range settlements {
+			for _, c := range currencyPairs {
+				if s == c.Trading {
+					pibotCurrencyPairs = append(pibotCurrencyPairs,
+						models.CurrencyPair{Trading: s, Settlement: c.Settlement})
+				}
+			}
+		}
+
+		for _, c := range pibotCurrencyPairs {
+			tradings1, ok := settlementsMap[c.Settlement]
+			tradings2, ok := settlementsMap[c.Trading]
+			if !ok || !ok {
+				continue
+			}
+			for _, t1 := range tradings1 {
+				for _, t2 := range tradings2 {
+					if t1 == t2 {
+						s.TriangleArbitrageTriples.triples =
+							append(s.TriangleArbitrageTriples.triples,
+								TriangleArbitrageTriple{
+									exchangeCurrencyPair{
+										exchange: e,
+										pair: models.CurrencyPair{
+											Settlement: c.Settlement,
+											Trading:    t1,
+										},
+									},
+									exchangeCurrencyPair{
+										exchange: e,
+										pair: models.CurrencyPair{
+											Settlement: c.Trading,
+											Trading:    t1,
+										},
+									},
+									exchangeCurrencyPair{
+										exchange: e,
+										pair: models.CurrencyPair{
+											Settlement: c.Settlement,
+											Trading:    c.Trading,
+										},
+									}})
+						break
+					}
+				}
+			}
+		}
+	}
+	return nil
+}
+
+func (s *Scanner) TriangleOpportunities(expectedProfitRate float64) (opps entity.TriangleOpportunities, err error) {
+	wg := &sync.WaitGroup{}
+	workers := make(chan int, 10)
+	for _, arbTriple := range s.TriangleArbitrageTriples.triples {
+		wg.Add(1)
+		workers <- 1
+		go func(arbTriple TriangleArbitrageTriple) {
+			defer wg.Done()
+			/*
+				aRate, err := s.PublicResourceRepository.Rate(arbTriple.a.exchange,arbTriple.a.pair.Trading,arbTriple.a.pair.Settlement)
+				if err != nil {
+					<-workers
+					logger.Get().Error(err)
+					return
+				}
+				bRate, err := s.PublicResourceRepository.Rate(arbTriple.b.exchange,arbTriple.b.pair.Trading,arbTriple.b.pair.Settlement)
+				if err != nil {
+					<-workers
+					logger.Get().Error(err)
+					return
+				}
+				intermediateRate, err := s.PublicResourceRepository.Rate(arbTriple.intermediaPair.exchange,arbTriple.intermediaPair.pair.Trading,arbTriple.intermediaPair.pair.Settlement)
+				if err != nil {
+					<-workers
+					logger.Get().Error(err)
+					return
+				}
+				tradeFeeMap,err := s.PrivateResourceRepository.TradeFeeRates(arbTriple.a.exchange)
+				if err != nil {
+					<-workers
+					logger.Get().Error(err)
+					return
+				}
+				tradeFeeRate := 1 - (1-tradeFeeMap[arbTriple.a.pair.Trading][arbTriple.a.pair.Settlement].TakerFee) *
+					(1-tradeFeeMap[arbTriple.b.pair.Trading][arbTriple.b.pair.Settlement].TakerFee) *
+					(1-tradeFeeMap[arbTriple.intermediaPair.pair.Trading][arbTriple.intermediaPair.pair.Settlement].TakerFee)
+
+				if (intermediateRate*bRate) / aRate  > 1+expectedProfitRate + tradeFeeRate {
+					logger.Get().Infof("--------------------Opportunity--------------------")
+					logger.Get().Infof("Buy1  %4s-%4s On %8s At %v", arbTriple.a.pair.Trading, arbTriple.a.pair.Settlement, arbTriple.a.exchange, strconv.FormatFloat(aRate, 'f', 16, 64))
+					logger.Get().Infof("Sell1 %4s-%4s On %8s At %v", arbTriple.b.pair.Trading, arbTriple.b.pair.Settlement, arbTriple.b.exchange, strconv.FormatFloat(bRate, 'f', 16, 64))
+					logger.Get().Infof("Sell2 %4s-%4s On %8s At %v", arbTriple.intermediaPair.pair.Trading, arbTriple.intermediaPair.pair.Settlement,arbTriple.intermediaPair.exchange, strconv.FormatFloat(intermediateRate, 'f', 16, 64))
+					logger.Get().Infof("Spread                      : %16s", strconv.FormatFloat((intermediateRate*bRate) - aRate, 'f', 16, 64))
+					logger.Get().Infof("SpreadRate                  : %16s", strconv.FormatFloat((intermediateRate*bRate) / aRate, 'f', 16, 64))
+					logger.Get().Infof("---------------------------------------------------")
+				} else if aRate / (intermediateRate*bRate) > 1+expectedProfitRate + tradeFeeRate {
+					logger.Get().Infof("--------------------Opportunity--------------------")
+					logger.Get().Infof("Buy1  %4s-%4s On %8s At %v", arbTriple.intermediaPair.pair.Trading, arbTriple.intermediaPair.pair.Settlement,arbTriple.intermediaPair.exchange, strconv.FormatFloat(intermediateRate, 'f', 16, 64))
+					logger.Get().Infof("Buy2  %4s-%4s On %8s At %v", arbTriple.b.pair.Trading, arbTriple.b.pair.Settlement, arbTriple.b.exchange, strconv.FormatFloat(bRate, 'f', 16, 64))
+					logger.Get().Infof("Sell  %4s-%4s On %8s At %v", arbTriple.a.pair.Trading, arbTriple.a.pair.Settlement, arbTriple.a.exchange, strconv.FormatFloat(aRate, 'f', 16, 64))
+					logger.Get().Infof("Spread                      : %16s", strconv.FormatFloat(aRate - (intermediateRate*bRate), 'f', 16, 64))
+					logger.Get().Infof("SpreadRate                  : %16s", strconv.FormatFloat(aRate / (intermediateRate*bRate), 'f', 16, 64))
+					logger.Get().Infof("---------------------------------------------------")
+				}
+			*/
+			aBoard, err := s.PublicResourceRepository.Board(arbTriple.a.exchange, arbTriple.a.pair.Trading, arbTriple.a.pair.Settlement)
+			if err != nil {
+				<-workers
+				logger.Get().Error(err)
+				return
+			}
+			bBoard, err := s.PublicResourceRepository.Board(arbTriple.b.exchange, arbTriple.b.pair.Trading, arbTriple.b.pair.Settlement)
+			if err != nil {
+				<-workers
+				logger.Get().Error(err)
+				return
+			}
+			intermediateBoard, err := s.PublicResourceRepository.Board(arbTriple.intermediaPair.exchange, arbTriple.intermediaPair.pair.Trading, arbTriple.intermediaPair.pair.Settlement)
+			if err != nil {
+				<-workers
+				logger.Get().Error(err)
+				return
+			}
+			tradeFeeMap, err := s.PrivateResourceRepository.TradeFeeRates(arbTriple.a.exchange)
+			if err != nil {
+				<-workers
+				logger.Get().Error(err)
+				return
+			}
+			tradeFeeRate := 1 - (1-tradeFeeMap[arbTriple.a.pair.Trading][arbTriple.a.pair.Settlement].TakerFee)*
+				(1-tradeFeeMap[arbTriple.b.pair.Trading][arbTriple.b.pair.Settlement].TakerFee)*
+				(1-tradeFeeMap[arbTriple.intermediaPair.pair.Trading][arbTriple.intermediaPair.pair.Settlement].TakerFee)
+			// aの買い手の最良希望価格
+			aBestBidPrice := aBoard.BestBidPrice()
+			// aの売り手の最良希望価格
+			aBestAskPrice := aBoard.BestAskPrice()
+			// bの買い手の最良希望価格
+			bBestBidPrice := bBoard.BestBidPrice()
+			// bの売り手の最良希望価格
+			bBestAskPrice := bBoard.BestAskPrice()
+			//
+			intermediateBidPrice := intermediateBoard.BestBidPrice()
+			// intermediateの売り手の最良希望価格
+			intermediateAskPrice := intermediateBoard.BestAskPrice()
+			if aBestBidPrice == 0 || aBestAskPrice == 0 || bBestBidPrice == 0 || bBestAskPrice == 0 || intermediateBidPrice == 0 || intermediateAskPrice == 0 {
+				<-workers
+				return
+			}
+			if (intermediateBidPrice*bBestBidPrice)/aBestAskPrice > 1+expectedProfitRate+tradeFeeRate {
+				/*
+				s.MessageRepository.Send(fmt.Sprintf("[Scanner] triangle margin found"))
+				messageText := make([]string,0)
+				messageText = append(messageText,"--------------------Opportunity--------------------")
+				messageText = append(messageText,fmt.Sprintf("Buy1  %4s-%4s On %8s At %v", arbTriple.a.pair.Trading, arbTriple.a.pair.Settlement, arbTriple.a.exchange, strconv.FormatFloat(aBestAskPrice, 'f', 16, 64)))
+				messageText = append(messageText,fmt.Sprintf("Sell1 %4s-%4s On %8s At %v", arbTriple.b.pair.Trading, arbTriple.b.pair.Settlement, arbTriple.b.exchange, strconv.FormatFloat(bBestBidPrice, 'f', 16, 64)))
+				messageText = append(messageText,fmt.Sprintf("Sell2 %4s-%4s On %8s At %v", arbTriple.intermediaPair.pair.Trading, arbTriple.intermediaPair.pair.Settlement, arbTriple.intermediaPair.exchange, strconv.FormatFloat(intermediateBidPrice, 'f', 16, 64)))
+				messageText = append(messageText,fmt.Sprintf("Spread                      : %16s", strconv.FormatFloat((intermediateBidPrice*bBestBidPrice)-aBestAskPrice, 'f', 16, 64)))
+				messageText = append(messageText,fmt.Sprintf("SpreadRate                  : %16s", strconv.FormatFloat((intermediateBidPrice*bBestBidPrice)/aBestAskPrice, 'f', 16, 64)))
+				messageText = append(messageText,"---------------------------------------------------")
+				s.MessageRepository.BulkSend(messageText)
+				*/
+				opp := &entity.TriangleOpportunity{
+					Triples:[]entity.Item{
+						{"BUY",arbTriple.a.exchange,arbTriple.a.pair.Trading,arbTriple.a.pair.Settlement},
+						{"SELL", arbTriple.b.exchange, arbTriple.b.pair.Trading,arbTriple.b.pair.Settlement},
+						{"SELL",arbTriple.intermediaPair.exchange,arbTriple.intermediaPair.pair.Trading, arbTriple.intermediaPair.pair.Settlement},
+					},
+				}
+				opps.Set(opp)
+			}
+			if aBestBidPrice/(intermediateAskPrice*bBestAskPrice) > 1+expectedProfitRate+tradeFeeRate {
+				/*
+				s.MessageRepository.Send(fmt.Sprintf("[Scanner] triangle margin found"))
+				messageText := make([]string,0)
+				messageText = append(messageText,"--------------------Opportunity--------------------")
+				messageText = append(messageText,fmt.Sprintf("Buy1  %4s-%4s On %8s At %v", arbTriple.intermediaPair.pair.Trading, arbTriple.intermediaPair.pair.Settlement, arbTriple.intermediaPair.exchange, strconv.FormatFloat(intermediateAskPrice, 'f', 16, 64)))
+				messageText = append(messageText,fmt.Sprintf("Buy2  %4s-%4s On %8s At %v", arbTriple.b.pair.Trading, arbTriple.b.pair.Settlement, arbTriple.b.exchange, strconv.FormatFloat(bBestAskPrice, 'f', 16, 64)))
+				messageText = append(messageText,fmt.Sprintf("Sell  %4s-%4s On %8s At %v", arbTriple.a.pair.Trading, arbTriple.a.pair.Settlement, arbTriple.a.exchange, strconv.FormatFloat(aBestBidPrice, 'f', 16, 64)))
+				messageText = append(messageText,fmt.Sprintf("Spread                      : %16s", strconv.FormatFloat(aBestBidPrice-(intermediateAskPrice*bBestAskPrice), 'f', 16, 64)))
+				messageText = append(messageText,fmt.Sprintf("SpreadRate                  : %16s", strconv.FormatFloat(aBestBidPrice/(intermediateAskPrice*bBestAskPrice), 'f', 16, 64)))
+				messageText = append(messageText,fmt.Sprintf("---------------------------------------------------"))
+				s.MessageRepository.BulkSend(messageText)
+				*/
+				opp := &entity.TriangleOpportunity{
+					Triples:[]entity.Item{
+						{"BUY",arbTriple.intermediaPair.exchange,arbTriple.intermediaPair.pair.Trading, arbTriple.intermediaPair.pair.Settlement},
+						{"BUY", arbTriple.b.exchange, arbTriple.b.pair.Trading,arbTriple.b.pair.Settlement},
+						{"SELL",arbTriple.a.exchange,arbTriple.a.pair.Trading,arbTriple.a.pair.Settlement},
+					},
+				}
+				opps.Set(opp)
+			}
+			<-workers
+		}(arbTriple)
+	}
+	wg.Wait()
+	return opps, nil
 }
 
 func (s *Scanner) RegisterExchanges(exchanges []string) error {
@@ -161,6 +439,7 @@ func (s *Scanner) RegisterExchanges(exchanges []string) error {
 			return err
 		}
 		s.FrozenCurrency.Set(v, FrozenCurrency)
+
 	}
 
 	exchangeList := listing.StringReplacer(exchanges)
@@ -171,7 +450,7 @@ func (s *Scanner) RegisterExchanges(exchanges []string) error {
 		exchange1 := exchangeComb[0]
 		exchange2 := exchangeComb[1]
 		disabledCurrencies := DisabledCurrencies()
-		frozenCurrencies :=s.FrozenCurrency.GetAll()
+		frozenCurrencies := s.FrozenCurrency.GetAll()
 		for _, c1 := range currencyPair1 {
 			for _, c2 := range currencyPair2 {
 				if c1.Settlement == c2.Settlement && c1.Trading == c2.Trading {
@@ -229,16 +508,22 @@ func (s *Scanner) Opportunities(expectedProfitRate float64) (opps entity.Opportu
 			bBestBidPrice := bBoard.BestBidPrice()
 			// bの売り手の最良希望価格
 			bBestAskPrice := bBoard.BestAskPrice()
-			if aBestBidPrice==0||aBestAskPrice==0||bBestBidPrice==0||bBestAskPrice==0 {
+			if aBestBidPrice == 0 || aBestAskPrice == 0 || bBestBidPrice == 0 || bBestAskPrice == 0 {
 
-			}else if bBestBidPrice/aBestAskPrice > 1+expectedProfitRate {
-				tradeAmount := math.Min(aBoard.BestAskAmount(), bBoard.BestBidAmount())
-				o := entity.NewOpportunity(entity.NewSide(arbPair.a.exchange, aBestAskPrice, arbPair.a.pair), entity.NewSide(arbPair.b.exchange, bBestBidPrice, arbPair.b.pair), tradeAmount)
-				opps.Set(&o)
+			} else if bBestBidPrice/aBestAskPrice > 1+expectedProfitRate {
+				opp := entity.Opportunity{
+					Pairs:[]entity.Item{
+						{"BUY", arbPair.a.exchange, arbPair.a.pair.Trading, arbPair.a.pair.Settlement},
+						{"SELL", arbPair.b.exchange, arbPair.b.pair.Trading, arbPair.b.pair.Settlement},
+					}}
+				opps.Set(&opp)
 			} else if aBestBidPrice/bBestAskPrice > 1+expectedProfitRate {
-				tradeAmount := math.Min(bBoard.BestAskAmount(), aBoard.BestBidAmount())
-				o := entity.NewOpportunity(entity.NewSide(arbPair.b.exchange, bBestAskPrice, arbPair.b.pair), entity.NewSide(arbPair.a.exchange, aBestBidPrice, arbPair.a.pair), tradeAmount)
-				opps.Set(&o)
+				opp := entity.Opportunity{
+					Pairs:[]entity.Item{
+						{"BUY", arbPair.b.exchange, arbPair.b.pair.Trading, arbPair.b.pair.Settlement},
+						{"SELL", arbPair.a.exchange, arbPair.a.pair.Trading, arbPair.a.pair.Settlement},
+					}}
+				opps.Set(&opp)
 			}
 			<-workers
 		}(arbPair)

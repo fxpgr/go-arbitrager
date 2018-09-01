@@ -2,19 +2,12 @@ package entity
 
 import (
 	"github.com/fxpgr/go-exchange-client/models"
-
-	"github.com/fxpgr/go-arbitrager/infrastructure/logger"
-	"github.com/pkg/errors"
-	"strconv"
-	"sync"
-	"fmt"
+	"reflect"
 )
 
-func NewOpportunity(buySide Side, sellSide Side, tradingAmount float64) Opportunity {
+func NewOpportunity(items []Item) Opportunity {
 	return Opportunity{
-		Buyside:       buySide,
-		Sellside:      sellSide,
-		tradingAmount: tradingAmount,
+		Pairs:items,
 	}
 }
 func NewOpportunities() *Opportunities {
@@ -32,10 +25,8 @@ func (os *Opportunities) GetAll() []Opportunity {
 }
 
 func (os *Opportunities) IsOngoing(o *Opportunity) bool {
-	for _, v := range os.opps {
-		if v.BuySide() == o.BuySide() && v.SellSide() == o.SellSide() &&
-			v.BuySidePair().Trading == o.BuySidePair().Trading &&
-			v.BuySidePair().Settlement == o.BuySidePair().Settlement {
+	for _, w := range os.opps {
+		if reflect.DeepEqual(w.Pairs, o.Pairs) {
 			return true
 		}
 	}
@@ -49,42 +40,14 @@ func (os *Opportunities) Set(o *Opportunity) error {
 
 func (os *Opportunities) Remove(o *Opportunity) error {
 	opps := make([]Opportunity, 0)
-	for _, v := range os.opps {
-		if v.BuySide() == o.BuySide() && v.SellSide() == o.SellSide() &&
-			v.BuySidePair().Trading == o.BuySidePair().Trading &&
-			v.BuySidePair().Settlement == o.BuySidePair().Settlement {
+	for _, w := range os.opps {
+		if reflect.DeepEqual(w.Pairs, o.Pairs) {
 		} else {
-			opps = append(opps, v)
+			opps = append(opps, w)
 		}
 	}
 	os.opps = opps
 	return nil
-}
-
-func (os *Opportunities) BuySideFilter(exchange string) (*Opportunities, error) {
-	opps := make([]Opportunity, 0)
-	for _, o := range os.opps {
-		if o.BuySide() == exchange {
-			opps = append(opps, o)
-		}
-	}
-	ret := &Opportunities{opps: opps}
-	return ret, nil
-}
-
-func (os *Opportunities) HighestDifOpportunity() (Opportunity, error) {
-	var ret Opportunity
-	dif := 0.0
-	for _, o := range os.opps {
-		if dif < o.Dif() {
-			dif = o.Dif()
-			ret = o
-		}
-	}
-	if len(os.opps) == 0 {
-		return Opportunity{}, errors.New("there is no os")
-	}
-	return ret, nil
 }
 
 func NewSide(exchange string, rate float64, currencyPair models.CurrencyPair) Side {
@@ -101,68 +64,79 @@ type Side struct {
 	currencyPair models.CurrencyPair
 }
 
-type Opportunity struct {
-	Buyside       Side
-	Sellside      Side
-	tradingAmount float64
+type Item struct {
+	Op string
+	Exchange   string
+	Trading    string
+	Settlement string
 }
 
-var oppM sync.RWMutex
-
-func (o Opportunity) MessageText() string {
-	log := fmt.Sprintf("--------------------Opportunity--------------------\n")
-	log += fmt.Sprintf("Buy  %4s-%4s On %8s At %v\n", o.Buyside.currencyPair.Trading, o.Buyside.currencyPair.Settlement, o.BuySide(), strconv.FormatFloat(o.Buyside.rate, 'f', 16, 64))
-	log += fmt.Sprintf("Sell %4s-%4s On %8s At %v\n", o.Sellside.currencyPair.Trading, o.Sellside.currencyPair.Settlement, o.SellSide(), strconv.FormatFloat(o.Sellside.rate, 'f', 16, 64))
-	log += fmt.Sprintf("Spread                      : %16s\n", strconv.FormatFloat(o.Sellside.rate-o.Buyside.rate, 'f', 16, 64))
-	log += fmt.Sprintf("SpreadRate                  : %16s\n", strconv.FormatFloat(o.Sellside.rate/o.Buyside.rate, 'f', 16, 64))
-	log += fmt.Sprintf("---------------------------------------------------")
-	return log
+type TriangleOpportunity struct {
+	Triples []Item
 }
 
-func (o Opportunity) Print() {
-	oppM.Lock()
-	defer oppM.Unlock()
-	logger.Get().Infof("--------------------Opportunity--------------------")
-	logger.Get().Infof("Buy  %4s-%4s On %8s At %v", o.Buyside.currencyPair.Trading, o.Buyside.currencyPair.Settlement, o.BuySide(), strconv.FormatFloat(o.Buyside.rate, 'f', 16, 64))
-	logger.Get().Infof("Sell %4s-%4s On %8s At %v", o.Sellside.currencyPair.Trading, o.Sellside.currencyPair.Settlement, o.SellSide(), strconv.FormatFloat(o.Sellside.rate, 'f', 16, 64))
-	logger.Get().Infof("Spread                      : %16s", strconv.FormatFloat(o.Sellside.rate-o.Buyside.rate, 'f', 16, 64))
-	logger.Get().Infof("SpreadRate                  : %16s", strconv.FormatFloat(o.Sellside.rate/o.Buyside.rate, 'f', 16, 64))
-	logger.Get().Infof("---------------------------------------------------")
+type TriangleOpportunities struct {
+	opps []TriangleOpportunity
 }
 
-func (o *Opportunity) TradingAmount() float64 {
-	return o.tradingAmount
-}
-
-func (o *Opportunity) Dif() float64 {
-	if o.Buyside.rate > o.Sellside.rate {
-		return o.Buyside.rate / o.Sellside.rate
+func(t *TriangleOpportunity) InterMediaMethod() string {
+	buyCounter := 0
+	for _, item := range t.Triples {
+		if item.Op == "BUY" {buyCounter += 1}
 	}
-	return o.Sellside.rate / o.Buyside.rate
+	if buyCounter == 2 {
+		return "BUY"
+	}
+	return "SELL"
 }
 
-func (o *Opportunity) BuySideRate() (rate float64) {
-	return o.Buyside.rate
+func NewTriangleOpportunities() *TriangleOpportunities {
+	return &TriangleOpportunities{
+		opps: make([]TriangleOpportunity, 0),
+	}
+}
+func (os *TriangleOpportunities) GetAll() []TriangleOpportunity {
+	return os.opps
 }
 
-func (o *Opportunity) SellSideRate() (rate float64) {
-	return o.Sellside.rate
+func (os *TriangleOpportunities) IsOngoing(o *TriangleOpportunity) bool {
+	for _, w := range os.opps {
+		for _, x := range w.Triples {
+			for _,p := range o.Triples {
+				if p.Trading == x.Trading && p.Settlement == x.Settlement &&
+					p.Exchange == x.Exchange && p.Op == x.Op {
+					return true
+				}
+			}
+		}
+	}
+	return false
 }
 
-func (o *Opportunity) BuySide() (exchange string) {
-	return o.Buyside.exchange
+func (os *TriangleOpportunities) Set(o *TriangleOpportunity) error {
+	os.opps = append(os.opps, *o)
+	return nil
 }
 
-func (o *Opportunity) SellSide() (exchange string) {
-	return o.Sellside.exchange
+func (os *TriangleOpportunities) Remove(o *TriangleOpportunity) error {
+	opps := make([]TriangleOpportunity, 0)
+	for _, w := range os.opps {
+		for _, x := range w.Triples {
+			for _,p := range o.Triples {
+				if p.Trading == x.Trading && p.Settlement == x.Settlement &&
+					p.Exchange == x.Exchange && p.Op == x.Op {
+				} else {
+					opps = append(opps, w)
+				}
+			}
+		}
+	}
+	os.opps = opps
+	return nil
 }
 
-func (o *Opportunity) BuySidePair() models.CurrencyPair {
-	return o.Buyside.currencyPair
-}
-
-func (o *Opportunity) SellSidePair() models.CurrencyPair {
-	return o.Sellside.currencyPair
+type Opportunity struct {
+	Pairs []Item
 }
 
 func (o *Opportunity) IsDuplicated(opp *Opportunity) bool {

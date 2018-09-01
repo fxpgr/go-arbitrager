@@ -14,20 +14,20 @@ type KeySetting struct {
 }
 
 type SlackSetting struct {
-	APIToken    string `yaml:"api_token"`
+	APIToken  string `yaml:"api_token"`
 	Username  string `yaml:"username"`
 	IconEmoji string `yaml:"icon_emoji"`
 	Channel   string `yaml:"channel"`
-	Debug     bool `yaml:"debug"`
+	Debug     bool   `yaml:"debug"`
 }
 
 type Config struct {
 	Slack    SlackSetting `yaml:"slack"`
-	Hitbtc   KeySetting `yaml:"hitbtc"`
-	Poloniex KeySetting `yaml:"poloniex"`
-	Bitflyer KeySetting `yaml:"bitflyer"`
-	Huobi    KeySetting `yaml:"huobi"`
-	Lbank    KeySetting `yaml:"lbank"`
+	Hitbtc   KeySetting   `yaml:"hitbtc"`
+	Poloniex KeySetting   `yaml:"poloniex"`
+	Bitflyer KeySetting   `yaml:"bitflyer"`
+	Huobi    KeySetting   `yaml:"huobi"`
+	Lbank    KeySetting   `yaml:"lbank"`
 }
 
 func (c *Config) Get(exchange string) KeySetting {

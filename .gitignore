@@ -1,3 +1,4 @@
 config.yml
 vendor
 logger.log
+error.log

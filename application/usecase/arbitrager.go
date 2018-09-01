@@ -15,7 +15,7 @@ type Arbitrager struct {
 	PublicResourceRepository  repository.PublicResourceRepository  `inject:""`
 	PrivateResourceRepository repository.PrivateResourceRepository `inject:""`
 	OngoingOpps               *entity.Opportunities                `inject:""`
-
+	OngoingTriangleOpps       *entity.TriangleOpportunities        `inject:""`
 }
 
 func NewArbitrager() *Arbitrager {
@@ -43,65 +43,65 @@ func (s *Arbitrager) Trace(position models.Position, o entity.Opportunity, expec
 		logger.Get().Errorf("[Error] %s", err)
 		return err
 	}
-	o.Print()
-	messageText := fmt.Sprintf("[Scanner] margin found\n```%s```", o.MessageText())
-	s.MessageRepository.Send(messageText)
-	messageText = fmt.Sprintf("[Arbitrager] then I'll trace margin until its convergenced")
-	s.MessageRepository.Send(messageText)
+	var initialBuyPrice float64
+	var initialSellPrice float64
 
-	buySideBoard, err := s.PublicResourceRepository.Board(o.BuySide(), o.BuySidePair().Trading, o.BuySidePair().Settlement)
-	if err != nil {
-		logger.Get().Errorf("[Error] %s", err)
-		s.OngoingOpps.Remove(&o)
-		return err
+
+	messageText := make([]string,0)
+	messageText = append(messageText,fmt.Sprintf("--------------------Opportunity--------------------"))
+	for _, item := range o.Pairs {
+		board, err := s.PublicResourceRepository.Board(item.Exchange, item.Trading,item.Settlement)
+		if err != nil {
+			logger.Get().Errorf("[Error] %s", err)
+			s.OngoingOpps.Remove(&o)
+			return err
+		}
+		if item.Op =="BUY"{
+			initialBuyPrice=board.BestAskPrice()
+			messageText = append(messageText, fmt.Sprintf("%4s %4s-%4s On %8s At %v", item.Op,item.Trading,item.Settlement,item.Exchange, strconv.FormatFloat(initialBuyPrice, 'f', 16, 64)))
+		} else {
+			initialSellPrice=board.BestBidPrice()
+			messageText = append(messageText, fmt.Sprintf("%4s %4s-%4s On %8s At %v", item.Op,item.Trading,item.Settlement,item.Exchange, strconv.FormatFloat(initialSellPrice, 'f', 16, 64)))
+		}
 	}
-	initialBuySidePrice := buySideBoard.BestAskPrice()
+	messageText = append(messageText,fmt.Sprintf("Spread                      : %16s", strconv.FormatFloat(initialSellPrice-initialBuyPrice, 'f', 16, 64)))
+	messageText = append(messageText,fmt.Sprintf("SpreadRate                  : %16s", strconv.FormatFloat(initialSellPrice/initialBuyPrice, 'f', 16, 64)))
+	messageText = append(messageText,fmt.Sprintf("---------------------------------------------------"))
+	s.MessageRepository.BulkSend(messageText)
+	s.MessageRepository.Send(fmt.Sprintf("[Arbitrager] then I'll trace margin until its convergenced"))
 
-	sellSideBoard, err := s.PublicResourceRepository.Board(o.SellSide(), o.SellSidePair().Trading, o.SellSidePair().Settlement)
-	if err != nil {
-		logger.Get().Errorf("[Error] %s", err)
-		s.OngoingOpps.Remove(&o)
-		return err
-	}
-	initialSellSidePrice := sellSideBoard.BestBidPrice()
 
-	time.Sleep(3)
+	time.Sleep(3 * time.Second)
+	var bestBuyPrice float64
+	var bestSellPrice float64
 	for {
-		buySideBoard, err := s.PublicResourceRepository.Board(o.BuySide(), o.BuySidePair().Trading, o.BuySidePair().Settlement)
-		if err != nil {
-			logger.Get().Errorf("[Error] %s", err)
-			time.Sleep(3* time.Second)
-			continue
+		for _, item := range o.Pairs {
+			board, err := s.PublicResourceRepository.Board(item.Exchange, item.Trading,item.Settlement)
+			if err != nil {
+				logger.Get().Errorf("[Error] %s", err)
+				time.Sleep(3 * time.Second)
+				continue
+			}
+			if item.Op =="BUY"{
+				bestBuyPrice=board.BestAskPrice()
+			} else {
+				bestSellPrice=board.BestBidPrice()
+			}
 		}
-		bestBuyPrice := buySideBoard.BestAskPrice()
-
-		sellSideBoard, err := s.PublicResourceRepository.Board(o.SellSide(), o.SellSidePair().Trading, o.SellSidePair().Settlement)
-		if err != nil {
-			logger.Get().Errorf("[Error] %s", err)
-			time.Sleep(3* time.Second)
-			continue
-		}
-		bestSellPrice := sellSideBoard.BestBidPrice()
 		if bestSellPrice/bestBuyPrice < 1+expectedProfitRate/4 {
-
-			log := fmt.Sprintf("--------------------Convergence--------------------\n")
-			log += fmt.Sprintf("Buyside    %4s-%4s On %8s\n", o.BuySidePair().Trading, o.BuySidePair().Settlement, o.BuySide())
-			log += fmt.Sprintf("Sellside   %4s-%4s On %8s\n", o.SellSidePair().Trading, o.SellSidePair().Settlement, o.SellSide())
-			log += fmt.Sprintf("Buyside  : %16s -> %16s\n", strconv.FormatFloat(initialBuySidePrice, 'f', 16, 64),strconv.FormatFloat(bestBuyPrice, 'f', 16, 64) )
-			log += fmt.Sprintf("Sellside : %16s -> %16s\n", strconv.FormatFloat(initialSellSidePrice, 'f', 16, 64), strconv.FormatFloat(bestSellPrice, 'f', 16, 64))
-			log += fmt.Sprintf("---------------------------------------------------")
-			messageText := fmt.Sprintf("[Arbitrager] convergence found\n```%s```", log)
-			s.MessageRepository.Send(messageText)
-
-			logger.Get().Infof("--------------------Convergence--------------------")
-			logger.Get().Infof("Buyside    %4s-%4s On %8s", o.BuySidePair().Trading, o.BuySidePair().Settlement, o.BuySide())
-			logger.Get().Infof("Sellside   %4s-%4s On %8s", o.SellSidePair().Trading, o.SellSidePair().Settlement, o.SellSide())
-			logger.Get().Infof("Buyside  : %16s -> %16s", strconv.FormatFloat(initialBuySidePrice, 'f', 16, 64),strconv.FormatFloat(bestBuyPrice, 'f', 16, 64) )
-			logger.Get().Infof("Sellside : %16s -> %16s", strconv.FormatFloat(initialSellSidePrice, 'f', 16, 64), strconv.FormatFloat(bestSellPrice, 'f', 16, 64))
-			logger.Get().Infof("---------------------------------------------------")
+			s.MessageRepository.Send(fmt.Sprintf("[Arbitrager] convergence found"))
+			messageText := make([]string,0)
+			messageText = append(messageText,"--------------------Convergence--------------------")
+			for _, item := range o.Pairs {
+				messageText = append(messageText,fmt.Sprintf("%4s %4s-%4s On %8s", item.Op, item.Trading, item.Settlement, item.Exchange))
+			}
+			messageText = append(messageText,fmt.Sprintf("BUY  : %16s -> %16s", strconv.FormatFloat(initialBuyPrice, 'f', 16, 64), strconv.FormatFloat(bestBuyPrice, 'f', 16, 64)))
+			messageText = append(messageText,fmt.Sprintf("SELL : %16s -> %16s", strconv.FormatFloat(initialSellPrice, 'f', 16, 64), strconv.FormatFloat(bestSellPrice, 'f', 16, 64)))
+			messageText = append(messageText,fmt.Sprintf("---------------------------------------------------"))
+			s.MessageRepository.BulkSend(messageText)
 			break
 		}
-		time.Sleep(15* time.Second)
+		time.Sleep(15 * time.Second)
 	}
 
 	if err := s.OngoingOpps.Remove(&o); err != nil {
@@ -111,9 +111,105 @@ func (s *Arbitrager) Trace(position models.Position, o entity.Opportunity, expec
 	return nil
 }
 
-func (s *Arbitrager) Arbitrage(position models.Position, o entity.Opportunity, expectedProfitRate float64) error {
+
+func (s *Arbitrager) TraceTriangle(o entity.TriangleOpportunity, expectedProfitRate float64) error {
+	if s.OngoingTriangleOpps.IsOngoing(&o) {
+		return nil
+	}
+	if err := s.OngoingTriangleOpps.Set(&o); err != nil {
+		logger.Get().Errorf("[Error] %s", err)
+		return err
+	}
+
+	initialBuyPrices := make([]float64,0)
+	initialSellPrices := make([]float64,0)
+
+	messageText := make([]string,0)
+	messageText = append(messageText,fmt.Sprintf("--------------------Opportunity--------------------"))
+	for _, item := range o.Triples {
+		board, err := s.PublicResourceRepository.Board(item.Exchange, item.Trading,item.Settlement)
+		if err != nil {
+			logger.Get().Errorf("[Error] %s", err)
+			s.OngoingTriangleOpps.Remove(&o)
+			return err
+		}
+		if item.Op == "BUY" {
+			initialBuyPrices = append(initialBuyPrices, board.BestAskPrice())
+			messageText = append(messageText, fmt.Sprintf("%4s %4s-%4s On %8s At %v", item.Op,item.Trading,item.Settlement,item.Exchange, strconv.FormatFloat(board.BestAskPrice(), 'f', 16, 64)))
+		} else {
+			initialSellPrices = append(initialSellPrices, board.BestBidPrice())
+			messageText = append(messageText, fmt.Sprintf("%4s %4s-%4s On %8s At %v", item.Op,item.Trading,item.Settlement,item.Exchange, strconv.FormatFloat(board.BestBidPrice(), 'f', 16, 64)))
+		}
+	}
+
+	initialBuyPrice  := 1.0
+	initialSellPrice := 1.0
+	for _,p := range initialBuyPrices {
+		initialBuyPrice *= p
+	}
+	for _,p := range initialSellPrices {
+		initialSellPrice *= p
+	}
+	messageText = append(messageText,fmt.Sprintf("Spread                      : %16s", strconv.FormatFloat(initialSellPrice-initialBuyPrice, 'f', 16, 64)))
+	messageText = append(messageText,fmt.Sprintf("SpreadRate                  : %16s", strconv.FormatFloat(initialSellPrice/initialBuyPrice, 'f', 16, 64)))
+	messageText = append(messageText,fmt.Sprintf("---------------------------------------------------"))
+	s.MessageRepository.BulkSend(messageText)
+	s.MessageRepository.Send(fmt.Sprintf("[Arbitrager] then I'll trace margin until its convergenced"))
+
+	time.Sleep(3 * time.Second)
+
+	for {
+		bestBuyPrices := make([]float64,0)
+		bestSellPrices := make([]float64,0)
+		bestBuyPrice := 1.0
+		bestSellPrice := 1.0
+		for _, item := range o.Triples {
+			board, err := s.PublicResourceRepository.Board(item.Exchange, item.Trading,item.Settlement)
+			if err != nil {
+				logger.Get().Errorf("[Error] %s", err)
+				time.Sleep(3 * time.Second)
+				continue
+			}
+			if item.Op =="BUY"{
+				bestBuyPrices = append(bestBuyPrices, board.BestAskPrice())
+			} else {
+				bestSellPrices = append(bestSellPrices, board.BestBidPrice())
+			}
+		}
+		for _,p := range bestBuyPrices {
+			bestBuyPrice *= p
+		}
+		for _,p := range bestSellPrices {
+			bestSellPrice *= p
+		}
+		if bestSellPrice/bestBuyPrice < 1+expectedProfitRate/4 {
+			s.MessageRepository.Send(fmt.Sprintf("[Arbitrager] convergence found"))
+			messageText := make([]string,0)
+			messageText = append(messageText,"--------------------Convergence--------------------")
+			for _, item := range o.Triples {
+				messageText = append(messageText,fmt.Sprintf("%4s %4s-%4s On %8s", item.Op, item.Trading, item.Settlement, item.Exchange))
+			}
+			messageText = append(messageText,fmt.Sprintf("BUY  : %16s -> %16s", strconv.FormatFloat(initialBuyPrice, 'f', 16, 64), strconv.FormatFloat(bestBuyPrice, 'f', 16, 64)))
+			messageText = append(messageText,fmt.Sprintf("SELL : %16s -> %16s", strconv.FormatFloat(initialSellPrice, 'f', 16, 64), strconv.FormatFloat(bestSellPrice, 'f', 16, 64)))
+			messageText = append(messageText,fmt.Sprintf("---------------------------------------------------"))
+			s.MessageRepository.BulkSend(messageText)
+			break
+		}
+		time.Sleep(15 * time.Second)
+	}
+
+	if err := s.OngoingTriangleOpps.Remove(&o); err != nil {
+		logger.Get().Error(err)
+		return err
+	}
+	return nil
+}
+
+
+
+/*func (s *Arbitrager) Arbitrage(position models.Position, o entity.Opportunity, expectedProfitRate float64) error {
 	if s.OngoingOpps.IsOngoing(&o) {
-		logger.Get().Infof("duplicated %v",o)
+		logger.Get().Infof("duplicated %v", o)
 		return nil
 	}
 	if err := s.OngoingOpps.Set(&o); err != nil {
@@ -159,7 +255,7 @@ func (s *Arbitrager) Arbitrage(position models.Position, o entity.Opportunity, e
 				}
 				orderFee := tradeFeeRate.TakerFee
 				bestBuyPrice := buyBoard.BestAskPrice()
-				amount := o.TradingAmount() * (1 - orderFee - 0.0002)
+				amount := 1 * (1 - orderFee - 0.0002)
 				orderNumber, err := s.PrivateResourceRepository.Order(
 					o.BuySide(),
 					o.BuySidePair().Trading, o.BuySidePair().Settlement,
@@ -291,3 +387,4 @@ func (s *Arbitrager) Arbitrage(position models.Position, o entity.Opportunity, e
 	return nil
 
 }
+*/

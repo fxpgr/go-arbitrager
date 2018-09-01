@@ -18,6 +18,14 @@
   version = "v1.0.0"
 
 [[projects]]
+  branch = "master"
+  digest = "1:b781c6ce2a81ea819878fe0e907182aa2d3e55629408a9fdbfdff62789f93614"
+  name = "github.com/bluele/slack"
+  packages = ["."]
+  pruneopts = "UT"
+  revision = "b4b4d354a079fbf4bd948faad01b32cecb2ffe03"
+
+[[projects]]
   digest = "1:ffe9824d294da03b391f44e1ae8281281b4afc1bdaa9588c9097785e3af10cec"
   name = "github.com/davecgh/go-spew"
   packages = ["spew"]
@@ -43,7 +51,7 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:4d82e0708756ff4439d4a215707b01f878ae3cfa52e9d3cbc054bc356c7fd661"
+  digest = "1:dbec35014e69d70e1c9bc0c4807f6eb3bb85f66c34d83e7176ba985f47a4874e"
   name = "github.com/fxpgr/go-exchange-client"
   packages = [
     "api/private",
@@ -52,7 +60,7 @@
     "models",
   ]
   pruneopts = "UT"
-  revision = "7307d801112b958b0bd09979623bac05d5ed21a7"
+  revision = "fe8bdee9f65a5909c4d55c06349669e189474180"
 
 [[projects]]
   branch = "master"
@@ -162,6 +170,7 @@
   analyzer-name = "dep"
   analyzer-version = 1
   input-imports = [
+    "github.com/bluele/slack",
     "github.com/facebookgo/inject",
     "github.com/fxpgr/go-exchange-client/api/private",
     "github.com/fxpgr/go-exchange-client/api/public",
