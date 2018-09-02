@@ -42,9 +42,10 @@ func main() {
 		DB: session.DB("arbitrager"),
 	}
 	app.Action = func(c *cli.Context) error {
-		if c.String("mode") == "test" {
+		if c.String("mode") == "lab" {
+		} else if c.String("mode") == "test" {
 			configPath := c.String("config")
-			exchanges := []string{"kucoin"}
+			exchanges := []string{"lbank", "kucoin"}
 			conf := config.ReadConfig(configPath)
 
 			var scanner usecase.Scanner
@@ -82,7 +83,7 @@ func main() {
 			scanner.MessageRepository.Send( "[Scanner] scan started")
 
 			scanner.SyncRate(exchanges)
-			tick := time.NewTicker(30 * time.Second)
+			tick := time.NewTicker(15 * time.Second)
 			for {
 				select {
 				case <-tick.C:

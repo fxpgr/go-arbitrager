@@ -12,6 +12,8 @@ import (
 	"gopkg.in/mgo.v2"
 	"sync"
 	"time"
+	//"github.com/pkg/errors"
+	"github.com/pkg/errors"
 )
 
 func DisabledCurrencies() []string {
@@ -139,7 +141,7 @@ func (s *Scanner) TriggerWatch(exchanges []string) error {
 	return nil
 }
 
-func (s *Scanner) SyncRate(exchanges []string) error {
+func (s *Scanner) SyncRate(exchanges []string) (err error) {
 	logger.Get().Debug("rate sync triggered")
 	wg := &sync.WaitGroup{}
 	for _, v := range exchanges {
@@ -149,19 +151,21 @@ func (s *Scanner) SyncRate(exchanges []string) error {
 			logger.Get().Debugf("rate sync %v", exchange)
 			RateMap, err := s.PublicResourceRepository.RateMap(exchange)
 			if err != nil {
-				logger.Get().Errorf("currency pair rate watcher faced error: %v %v", exchange, err)
+				err = errors.Errorf("currency pair rate watcher faced error: %v %v", exchange, err)
+				logger.Get().Error(err)
 			}
 			s.RateMap.Set(exchange, RateMap)
 			VolumeMap, err := s.PublicResourceRepository.VolumeMap(exchange)
 			if err != nil {
-				logger.Get().Errorf("currency pair rate watcher faced error: %v", err)
+				err = errors.Errorf("currency pair rate watcher faced error: %v", err)
+				logger.Get().Error(err)
 			}
 			s.VolumeMap.Set(exchange, VolumeMap)
 			logger.Get().Debugf("rate sync completed %v", exchange)
 		}(v)
 	}
 	wg.Wait()
-	return nil
+	return err
 }
 
 func (s *Scanner) FilterCurrency(currencies []string) error {
@@ -276,84 +280,84 @@ func (s *Scanner) RegisterTrianglePairs(exchanges []string) error {
 
 func (s *Scanner) TriangleOpportunities(expectedProfitRate float64) (opps entity.TriangleOpportunities, err error) {
 	wg := &sync.WaitGroup{}
-	workers := make(chan int, 10)
+	workers := make(chan int, 5)
 	for _, arbTriple := range s.TriangleArbitrageTriples.triples {
 		wg.Add(1)
 		workers <- 1
 		go func(arbTriple TriangleArbitrageTriple) {
 			defer wg.Done()
-			/*
-				aRate, err := s.PublicResourceRepository.Rate(arbTriple.a.exchange,arbTriple.a.pair.Trading,arbTriple.a.pair.Settlement)
-				if err != nil {
-					<-workers
-					logger.Get().Error(err)
-					return
-				}
-				bRate, err := s.PublicResourceRepository.Rate(arbTriple.b.exchange,arbTriple.b.pair.Trading,arbTriple.b.pair.Settlement)
-				if err != nil {
-					<-workers
-					logger.Get().Error(err)
-					return
-				}
-				intermediateRate, err := s.PublicResourceRepository.Rate(arbTriple.intermediaPair.exchange,arbTriple.intermediaPair.pair.Trading,arbTriple.intermediaPair.pair.Settlement)
-				if err != nil {
-					<-workers
-					logger.Get().Error(err)
-					return
-				}
-				tradeFeeMap,err := s.PrivateResourceRepository.TradeFeeRates(arbTriple.a.exchange)
-				if err != nil {
-					<-workers
-					logger.Get().Error(err)
-					return
-				}
-				tradeFeeRate := 1 - (1-tradeFeeMap[arbTriple.a.pair.Trading][arbTriple.a.pair.Settlement].TakerFee) *
-					(1-tradeFeeMap[arbTriple.b.pair.Trading][arbTriple.b.pair.Settlement].TakerFee) *
-					(1-tradeFeeMap[arbTriple.intermediaPair.pair.Trading][arbTriple.intermediaPair.pair.Settlement].TakerFee)
-
-				if (intermediateRate*bRate) / aRate  > 1+expectedProfitRate + tradeFeeRate {
-					logger.Get().Infof("--------------------Opportunity--------------------")
-					logger.Get().Infof("Buy1  %4s-%4s On %8s At %v", arbTriple.a.pair.Trading, arbTriple.a.pair.Settlement, arbTriple.a.exchange, strconv.FormatFloat(aRate, 'f', 16, 64))
-					logger.Get().Infof("Sell1 %4s-%4s On %8s At %v", arbTriple.b.pair.Trading, arbTriple.b.pair.Settlement, arbTriple.b.exchange, strconv.FormatFloat(bRate, 'f', 16, 64))
-					logger.Get().Infof("Sell2 %4s-%4s On %8s At %v", arbTriple.intermediaPair.pair.Trading, arbTriple.intermediaPair.pair.Settlement,arbTriple.intermediaPair.exchange, strconv.FormatFloat(intermediateRate, 'f', 16, 64))
-					logger.Get().Infof("Spread                      : %16s", strconv.FormatFloat((intermediateRate*bRate) - aRate, 'f', 16, 64))
-					logger.Get().Infof("SpreadRate                  : %16s", strconv.FormatFloat((intermediateRate*bRate) / aRate, 'f', 16, 64))
-					logger.Get().Infof("---------------------------------------------------")
-				} else if aRate / (intermediateRate*bRate) > 1+expectedProfitRate + tradeFeeRate {
-					logger.Get().Infof("--------------------Opportunity--------------------")
-					logger.Get().Infof("Buy1  %4s-%4s On %8s At %v", arbTriple.intermediaPair.pair.Trading, arbTriple.intermediaPair.pair.Settlement,arbTriple.intermediaPair.exchange, strconv.FormatFloat(intermediateRate, 'f', 16, 64))
-					logger.Get().Infof("Buy2  %4s-%4s On %8s At %v", arbTriple.b.pair.Trading, arbTriple.b.pair.Settlement, arbTriple.b.exchange, strconv.FormatFloat(bRate, 'f', 16, 64))
-					logger.Get().Infof("Sell  %4s-%4s On %8s At %v", arbTriple.a.pair.Trading, arbTriple.a.pair.Settlement, arbTriple.a.exchange, strconv.FormatFloat(aRate, 'f', 16, 64))
-					logger.Get().Infof("Spread                      : %16s", strconv.FormatFloat(aRate - (intermediateRate*bRate), 'f', 16, 64))
-					logger.Get().Infof("SpreadRate                  : %16s", strconv.FormatFloat(aRate / (intermediateRate*bRate), 'f', 16, 64))
-					logger.Get().Infof("---------------------------------------------------")
-				}
-			*/
-			aBoard, err := s.PublicResourceRepository.Board(arbTriple.a.exchange, arbTriple.a.pair.Trading, arbTriple.a.pair.Settlement)
+			/*aRate, err := s.PublicResourceRepository.Rate(arbTriple.a.exchange,arbTriple.a.pair.Trading,arbTriple.a.pair.Settlement)
 			if err != nil {
 				<-workers
 				logger.Get().Error(err)
+				return
+			}
+			bRate, err := s.PublicResourceRepository.Rate(arbTriple.b.exchange,arbTriple.b.pair.Trading,arbTriple.b.pair.Settlement)
+			if err != nil {
+				<-workers
+				logger.Get().Error(err)
+				return
+			}
+			intermediateRate, err := s.PublicResourceRepository.Rate(arbTriple.intermediaPair.exchange,arbTriple.intermediaPair.pair.Trading,arbTriple.intermediaPair.pair.Settlement)
+			if err != nil {
+				<-workers
+				logger.Get().Error(err)
+				return
+			}
+			tradeFeeMap,err := s.PrivateResourceRepository.TradeFeeRates(arbTriple.a.exchange)
+			if err != nil {
+				<-workers
+				logger.Get().Error(err)
+				return
+			}
+			_ = 1 - (1-tradeFeeMap[arbTriple.a.pair.Trading][arbTriple.a.pair.Settlement].TakerFee) *
+				(1-tradeFeeMap[arbTriple.b.pair.Trading][arbTriple.b.pair.Settlement].TakerFee) *
+				(1-tradeFeeMap[arbTriple.intermediaPair.pair.Trading][arbTriple.intermediaPair.pair.Settlement].TakerFee)
+
+			if (intermediateRate*bRate) / aRate  > 1+expectedProfitRate  {
+			opp := &entity.TriangleOpportunity{
+				Triples:[]entity.Item{
+					{"BUY",arbTriple.a.exchange,arbTriple.a.pair.Trading,arbTriple.a.pair.Settlement},
+					{"SELL", arbTriple.b.exchange, arbTriple.b.pair.Trading,arbTriple.b.pair.Settlement},
+					{"SELL",arbTriple.intermediaPair.exchange,arbTriple.intermediaPair.pair.Trading, arbTriple.intermediaPair.pair.Settlement},
+				},
+			}
+			opps.Set(opp)
+			} else if aRate / (intermediateRate*bRate) > 1+expectedProfitRate   {
+			opp := &entity.TriangleOpportunity{
+				Triples:[]entity.Item{
+					{"BUY",arbTriple.intermediaPair.exchange,arbTriple.intermediaPair.pair.Trading, arbTriple.intermediaPair.pair.Settlement},
+					{"BUY", arbTriple.b.exchange, arbTriple.b.pair.Trading,arbTriple.b.pair.Settlement},
+					{"SELL",arbTriple.a.exchange,arbTriple.a.pair.Trading,arbTriple.a.pair.Settlement},
+				},
+			}
+			opps.Set(opp)
+			}*/
+			aBoard, err := s.PublicResourceRepository.Board(arbTriple.a.exchange, arbTriple.a.pair.Trading, arbTriple.a.pair.Settlement)
+			if err != nil {
+				<-workers
+				//logger.Get().Error(errors.Wrap(err,arbTriple.a.exchange+":"+arbTriple.a.pair.Trading+arbTriple.a.pair.Settlement))
 				return
 			}
 			bBoard, err := s.PublicResourceRepository.Board(arbTriple.b.exchange, arbTriple.b.pair.Trading, arbTriple.b.pair.Settlement)
 			if err != nil {
 				<-workers
-				logger.Get().Error(err)
+				//logger.Get().Error(errors.Wrap(err,arbTriple.b.exchange+":"+arbTriple.b.pair.Trading+arbTriple.b.pair.Settlement))
 				return
 			}
 			intermediateBoard, err := s.PublicResourceRepository.Board(arbTriple.intermediaPair.exchange, arbTriple.intermediaPair.pair.Trading, arbTriple.intermediaPair.pair.Settlement)
 			if err != nil {
 				<-workers
-				logger.Get().Error(err)
+				//logger.Get().Error(errors.Wrap(err,arbTriple.intermediaPair.exchange+":"+arbTriple.intermediaPair.pair.Trading+arbTriple.intermediaPair.pair.Settlement))
 				return
 			}
 			tradeFeeMap, err := s.PrivateResourceRepository.TradeFeeRates(arbTriple.a.exchange)
 			if err != nil {
 				<-workers
-				logger.Get().Error(err)
+				//logger.Get().Error(err)
 				return
 			}
-			tradeFeeRate := 1 - (1-tradeFeeMap[arbTriple.a.pair.Trading][arbTriple.a.pair.Settlement].TakerFee)*
+			_ = 1 - (1-tradeFeeMap[arbTriple.a.pair.Trading][arbTriple.a.pair.Settlement].TakerFee)*
 				(1-tradeFeeMap[arbTriple.b.pair.Trading][arbTriple.b.pair.Settlement].TakerFee)*
 				(1-tradeFeeMap[arbTriple.intermediaPair.pair.Trading][arbTriple.intermediaPair.pair.Settlement].TakerFee)
 			// aの買い手の最良希望価格
@@ -372,19 +376,7 @@ func (s *Scanner) TriangleOpportunities(expectedProfitRate float64) (opps entity
 				<-workers
 				return
 			}
-			if (intermediateBidPrice*bBestBidPrice)/aBestAskPrice > 1+expectedProfitRate+tradeFeeRate {
-				/*
-				s.MessageRepository.Send(fmt.Sprintf("[Scanner] triangle margin found"))
-				messageText := make([]string,0)
-				messageText = append(messageText,"--------------------Opportunity--------------------")
-				messageText = append(messageText,fmt.Sprintf("Buy1  %4s-%4s On %8s At %v", arbTriple.a.pair.Trading, arbTriple.a.pair.Settlement, arbTriple.a.exchange, strconv.FormatFloat(aBestAskPrice, 'f', 16, 64)))
-				messageText = append(messageText,fmt.Sprintf("Sell1 %4s-%4s On %8s At %v", arbTriple.b.pair.Trading, arbTriple.b.pair.Settlement, arbTriple.b.exchange, strconv.FormatFloat(bBestBidPrice, 'f', 16, 64)))
-				messageText = append(messageText,fmt.Sprintf("Sell2 %4s-%4s On %8s At %v", arbTriple.intermediaPair.pair.Trading, arbTriple.intermediaPair.pair.Settlement, arbTriple.intermediaPair.exchange, strconv.FormatFloat(intermediateBidPrice, 'f', 16, 64)))
-				messageText = append(messageText,fmt.Sprintf("Spread                      : %16s", strconv.FormatFloat((intermediateBidPrice*bBestBidPrice)-aBestAskPrice, 'f', 16, 64)))
-				messageText = append(messageText,fmt.Sprintf("SpreadRate                  : %16s", strconv.FormatFloat((intermediateBidPrice*bBestBidPrice)/aBestAskPrice, 'f', 16, 64)))
-				messageText = append(messageText,"---------------------------------------------------")
-				s.MessageRepository.BulkSend(messageText)
-				*/
+			if (intermediateBidPrice*bBestBidPrice)/aBestAskPrice > 1+expectedProfitRate {
 				opp := &entity.TriangleOpportunity{
 					Triples:[]entity.Item{
 						{"BUY",arbTriple.a.exchange,arbTriple.a.pair.Trading,arbTriple.a.pair.Settlement},
@@ -394,19 +386,7 @@ func (s *Scanner) TriangleOpportunities(expectedProfitRate float64) (opps entity
 				}
 				opps.Set(opp)
 			}
-			if aBestBidPrice/(intermediateAskPrice*bBestAskPrice) > 1+expectedProfitRate+tradeFeeRate {
-				/*
-				s.MessageRepository.Send(fmt.Sprintf("[Scanner] triangle margin found"))
-				messageText := make([]string,0)
-				messageText = append(messageText,"--------------------Opportunity--------------------")
-				messageText = append(messageText,fmt.Sprintf("Buy1  %4s-%4s On %8s At %v", arbTriple.intermediaPair.pair.Trading, arbTriple.intermediaPair.pair.Settlement, arbTriple.intermediaPair.exchange, strconv.FormatFloat(intermediateAskPrice, 'f', 16, 64)))
-				messageText = append(messageText,fmt.Sprintf("Buy2  %4s-%4s On %8s At %v", arbTriple.b.pair.Trading, arbTriple.b.pair.Settlement, arbTriple.b.exchange, strconv.FormatFloat(bBestAskPrice, 'f', 16, 64)))
-				messageText = append(messageText,fmt.Sprintf("Sell  %4s-%4s On %8s At %v", arbTriple.a.pair.Trading, arbTriple.a.pair.Settlement, arbTriple.a.exchange, strconv.FormatFloat(aBestBidPrice, 'f', 16, 64)))
-				messageText = append(messageText,fmt.Sprintf("Spread                      : %16s", strconv.FormatFloat(aBestBidPrice-(intermediateAskPrice*bBestAskPrice), 'f', 16, 64)))
-				messageText = append(messageText,fmt.Sprintf("SpreadRate                  : %16s", strconv.FormatFloat(aBestBidPrice/(intermediateAskPrice*bBestAskPrice), 'f', 16, 64)))
-				messageText = append(messageText,fmt.Sprintf("---------------------------------------------------"))
-				s.MessageRepository.BulkSend(messageText)
-				*/
+			if aBestBidPrice/(intermediateAskPrice*bBestAskPrice) > 1+expectedProfitRate {
 				opp := &entity.TriangleOpportunity{
 					Triples:[]entity.Item{
 						{"BUY",arbTriple.intermediaPair.exchange,arbTriple.intermediaPair.pair.Trading, arbTriple.intermediaPair.pair.Settlement},
@@ -416,6 +396,7 @@ func (s *Scanner) TriangleOpportunities(expectedProfitRate float64) (opps entity
 				}
 				opps.Set(opp)
 			}
+
 			<-workers
 		}(arbTriple)
 	}
@@ -492,11 +473,13 @@ func (s *Scanner) Opportunities(expectedProfitRate float64) (opps entity.Opportu
 			aBoard, err := s.PublicResourceRepository.Board(arbPair.a.exchange, arbPair.a.pair.Trading, arbPair.a.pair.Settlement)
 			if err != nil {
 				<-workers
+				//logger.Get().Error(errors.Wrap(err,arbPair.a.exchange+":"+arbPair.a.pair.Trading+arbPair.a.pair.Settlement))
 				return
 			}
 			bBoard, err := s.PublicResourceRepository.Board(arbPair.b.exchange, arbPair.b.pair.Trading, arbPair.b.pair.Settlement)
 			if err != nil {
 				<-workers
+				//logger.Get().Error(errors.Wrap(err,arbPair.b.exchange+":"+arbPair.b.pair.Trading+arbPair.b.pair.Settlement))
 				return
 			}
 

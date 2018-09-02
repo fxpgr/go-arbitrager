@@ -51,7 +51,7 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:dbec35014e69d70e1c9bc0c4807f6eb3bb85f66c34d83e7176ba985f47a4874e"
+  digest = "1:c4223c77a8abe7cf9e48e557cd499c0cd7b80420dc4a4735e4cf989414844b8c"
   name = "github.com/fxpgr/go-exchange-client"
   packages = [
     "api/private",
@@ -60,7 +60,7 @@
     "models",
   ]
   pruneopts = "UT"
-  revision = "fe8bdee9f65a5909c4d55c06349669e189474180"
+  revision = "2445b9d6f5a7a6ae31a07a39e5164f0a3ba07c05"
 
 [[projects]]
   branch = "master"
@@ -69,6 +69,14 @@
   packages = ["."]
   pruneopts = "UT"
   revision = "795534c33c5ab6be8b85a15951664ab11fb70ea7"
+
+[[projects]]
+  digest = "1:808cdddf087fb64baeae67b8dfaee2069034d9704923a3cb8bd96a995421a625"
+  name = "github.com/patrickmn/go-cache"
+  packages = ["."]
+  pruneopts = "UT"
+  revision = "a3647f8e31d79543b2d0f0ae2fe5c379d72cedc0"
+  version = "v2.1.0"
 
 [[projects]]
   digest = "1:40e195917a951a8bf867cd05de2a46aaf1806c50cf92eebf4c16f78cd196f747"
@@ -179,6 +187,7 @@
     "github.com/pkg/errors",
     "github.com/urfave/cli",
     "go.uber.org/zap",
+    "go.uber.org/zap/zapcore",
     "gopkg.in/mgo.v2",
     "gopkg.in/mgo.v2/bson",
     "gopkg.in/yaml.v2",
