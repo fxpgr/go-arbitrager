@@ -351,16 +351,6 @@ func (s *Scanner) TriangleOpportunities(expectedProfitRate float64) (opps entity
 				//logger.Get().Error(errors.Wrap(err,arbTriple.intermediaPair.exchange+":"+arbTriple.intermediaPair.pair.Trading+arbTriple.intermediaPair.pair.Settlement))
 				return
 			}
-			tradeFeeMap, err := s.PrivateResourceRepository.TradeFeeRates(arbTriple.a.exchange)
-			if err != nil {
-				<-workers
-				//logger.Get().Error(err)
-				return
-			}
-			_ = 1 - (1-tradeFeeMap[arbTriple.a.pair.Trading][arbTriple.a.pair.Settlement].TakerFee)*
-				(1-tradeFeeMap[arbTriple.b.pair.Trading][arbTriple.b.pair.Settlement].TakerFee)*
-				(1-tradeFeeMap[arbTriple.intermediaPair.pair.Trading][arbTriple.intermediaPair.pair.Settlement].TakerFee)
-			// aの買い手の最良希望価格
 			aBestBidPrice := aBoard.BestBidPrice()
 			// aの売り手の最良希望価格
 			aBestAskPrice := aBoard.BestAskPrice()
@@ -368,7 +358,7 @@ func (s *Scanner) TriangleOpportunities(expectedProfitRate float64) (opps entity
 			bBestBidPrice := bBoard.BestBidPrice()
 			// bの売り手の最良希望価格
 			bBestAskPrice := bBoard.BestAskPrice()
-			//
+			// intermediateの買い手の最良希望価格
 			intermediateBidPrice := intermediateBoard.BestBidPrice()
 			// intermediateの売り手の最良希望価格
 			intermediateAskPrice := intermediateBoard.BestAskPrice()

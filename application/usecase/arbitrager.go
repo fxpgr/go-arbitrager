@@ -136,7 +136,12 @@ func (s *Arbitrager) Trace(position models.Position, o entity.Opportunity, expec
 	return nil
 }
 
-func (s *Arbitrager) TraceTriangle(o entity.TriangleOpportunity, expectedProfitRate float64) error {
+func(s *Arbitrager) TradeTriangle(o entity.TriangleOpportunity, expectedProfitRate float64) error {
+	// does not implemented
+	return nil
+}
+
+func(s *Arbitrager) TraceTriangle(o entity.TriangleOpportunity, expectedProfitRate float64) error {
 	if s.OngoingTriangleOpps.IsOngoing(&o) {
 		return nil
 	}
