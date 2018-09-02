@@ -7,7 +7,7 @@ import (
 
 func NewOpportunity(items []Item) Opportunity {
 	return Opportunity{
-		Pairs:items,
+		Pairs: items,
 	}
 }
 func NewOpportunities() *Opportunities {
@@ -65,7 +65,7 @@ type Side struct {
 }
 
 type Item struct {
-	Op string
+	Op         string
 	Exchange   string
 	Trading    string
 	Settlement string
@@ -79,10 +79,12 @@ type TriangleOpportunities struct {
 	opps []TriangleOpportunity
 }
 
-func(t *TriangleOpportunity) InterMediaMethod() string {
+func (t *TriangleOpportunity) InterMediaMethod() string {
 	buyCounter := 0
 	for _, item := range t.Triples {
-		if item.Op == "BUY" {buyCounter += 1}
+		if item.Op == "BUY" {
+			buyCounter += 1
+		}
 	}
 	if buyCounter == 2 {
 		return "BUY"
@@ -102,7 +104,7 @@ func (os *TriangleOpportunities) GetAll() []TriangleOpportunity {
 func (os *TriangleOpportunities) IsOngoing(o *TriangleOpportunity) bool {
 	for _, w := range os.opps {
 		for _, x := range w.Triples {
-			for _,p := range o.Triples {
+			for _, p := range o.Triples {
 				if p.Trading == x.Trading && p.Settlement == x.Settlement &&
 					p.Exchange == x.Exchange && p.Op == x.Op {
 					return true
@@ -122,7 +124,7 @@ func (os *TriangleOpportunities) Remove(o *TriangleOpportunity) error {
 	opps := make([]TriangleOpportunity, 0)
 	for _, w := range os.opps {
 		for _, x := range w.Triples {
-			for _,p := range o.Triples {
+			for _, p := range o.Triples {
 				if p.Trading == x.Trading && p.Settlement == x.Settlement &&
 					p.Exchange == x.Exchange && p.Op == x.Op {
 				} else {

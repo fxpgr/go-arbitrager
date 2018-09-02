@@ -12,6 +12,8 @@ import (
 	"github.com/fxpgr/go-exchange-client/models"
 	"github.com/urfave/cli"
 	"gopkg.in/mgo.v2"
+	"net/http"
+	_ "net/http/pprof"
 	"os"
 	"time"
 )
@@ -22,6 +24,9 @@ func help_and_exit() {
 }
 
 func main() {
+	go func() {
+		logger.Get().Debug(http.ListenAndServe("localhost:6060", nil))
+	}()
 	app := cli.NewApp()
 	app.Name = "go-arbitrager"
 	app.Usage = "arbitrage bot for dead of gold"
@@ -56,7 +61,7 @@ func main() {
 				&inject.Object{Value: persistence.NewPublicResourceRepository(exchanges)},
 				&inject.Object{Value: persistence.NewPrivateResourceRepository(private.PROJECT, conf, exchanges)},
 				&inject.Object{Value: historyRepository},
-				&inject.Object{Value: persistence.NewSlackClient(conf.Slack.APIToken, conf.Slack.Channel,logger.Get())},
+				&inject.Object{Value: persistence.NewSlackClient(conf.Slack.APIToken, conf.Slack.Channel, logger.Get())},
 				&inject.Object{Value: entity.NewFrozenCurrencySyncMap()},
 				&inject.Object{Value: entity.NewExchangeSymbolSyncMap()},
 				&inject.Object{Value: entity.NewRateSyncMap()},
@@ -80,7 +85,7 @@ func main() {
 			scanner.MessageRepository.Send(fmt.Sprintf("[Scanner] expected profit rate:%f", 0.003))
 			scanner.MessageRepository.Send(fmt.Sprintf("[Scanner] I'll watch exchanges %v", exchanges))
 			scanner.MessageRepository.Send(fmt.Sprintf("[Scanner] %d pairs registered", len(scanner.TriangleArbitrageTriples.Get())))
-			scanner.MessageRepository.Send( "[Scanner] scan started")
+			scanner.MessageRepository.Send("[Scanner] scan started")
 
 			scanner.SyncRate(exchanges)
 			tick := time.NewTicker(15 * time.Second)

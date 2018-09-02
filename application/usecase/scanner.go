@@ -378,20 +378,20 @@ func (s *Scanner) TriangleOpportunities(expectedProfitRate float64) (opps entity
 			}
 			if (intermediateBidPrice*bBestBidPrice)/aBestAskPrice > 1+expectedProfitRate {
 				opp := &entity.TriangleOpportunity{
-					Triples:[]entity.Item{
-						{"BUY",arbTriple.a.exchange,arbTriple.a.pair.Trading,arbTriple.a.pair.Settlement},
-						{"SELL", arbTriple.b.exchange, arbTriple.b.pair.Trading,arbTriple.b.pair.Settlement},
-						{"SELL",arbTriple.intermediaPair.exchange,arbTriple.intermediaPair.pair.Trading, arbTriple.intermediaPair.pair.Settlement},
+					Triples: []entity.Item{
+						{"BUY", arbTriple.a.exchange, arbTriple.a.pair.Trading, arbTriple.a.pair.Settlement},
+						{"SELL", arbTriple.b.exchange, arbTriple.b.pair.Trading, arbTriple.b.pair.Settlement},
+						{"SELL", arbTriple.intermediaPair.exchange, arbTriple.intermediaPair.pair.Trading, arbTriple.intermediaPair.pair.Settlement},
 					},
 				}
 				opps.Set(opp)
 			}
 			if aBestBidPrice/(intermediateAskPrice*bBestAskPrice) > 1+expectedProfitRate {
 				opp := &entity.TriangleOpportunity{
-					Triples:[]entity.Item{
-						{"BUY",arbTriple.intermediaPair.exchange,arbTriple.intermediaPair.pair.Trading, arbTriple.intermediaPair.pair.Settlement},
-						{"BUY", arbTriple.b.exchange, arbTriple.b.pair.Trading,arbTriple.b.pair.Settlement},
-						{"SELL",arbTriple.a.exchange,arbTriple.a.pair.Trading,arbTriple.a.pair.Settlement},
+					Triples: []entity.Item{
+						{"BUY", arbTriple.intermediaPair.exchange, arbTriple.intermediaPair.pair.Trading, arbTriple.intermediaPair.pair.Settlement},
+						{"BUY", arbTriple.b.exchange, arbTriple.b.pair.Trading, arbTriple.b.pair.Settlement},
+						{"SELL", arbTriple.a.exchange, arbTriple.a.pair.Trading, arbTriple.a.pair.Settlement},
 					},
 				}
 				opps.Set(opp)
@@ -495,14 +495,14 @@ func (s *Scanner) Opportunities(expectedProfitRate float64) (opps entity.Opportu
 
 			} else if bBestBidPrice/aBestAskPrice > 1+expectedProfitRate {
 				opp := entity.Opportunity{
-					Pairs:[]entity.Item{
+					Pairs: []entity.Item{
 						{"BUY", arbPair.a.exchange, arbPair.a.pair.Trading, arbPair.a.pair.Settlement},
 						{"SELL", arbPair.b.exchange, arbPair.b.pair.Trading, arbPair.b.pair.Settlement},
 					}}
 				opps.Set(&opp)
 			} else if aBestBidPrice/bBestAskPrice > 1+expectedProfitRate {
 				opp := entity.Opportunity{
-					Pairs:[]entity.Item{
+					Pairs: []entity.Item{
 						{"BUY", arbPair.b.exchange, arbPair.b.pair.Trading, arbPair.b.pair.Settlement},
 						{"SELL", arbPair.a.exchange, arbPair.a.pair.Trading, arbPair.a.pair.Settlement},
 					}}

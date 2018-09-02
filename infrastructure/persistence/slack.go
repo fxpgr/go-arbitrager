@@ -3,8 +3,8 @@ package persistence
 import (
 	"github.com/bluele/slack"
 	"github.com/fxpgr/go-arbitrager/domain/repository"
-	"go.uber.org/zap"
 	"github.com/fxpgr/go-arbitrager/infrastructure/logger"
+	"go.uber.org/zap"
 	"sync"
 )
 
@@ -25,8 +25,8 @@ func (s *slackClient) BulkSend(messages []string) error {
 	mtx.Lock()
 	defer mtx.Unlock()
 	slackMessage := "```"
-	for _,m := range messages {
-		slackMessage += m+"\n"
+	for _, m := range messages {
+		slackMessage += m + "\n"
 		s.logger.Info(m)
 	}
 	slackMessage += "```"
@@ -34,5 +34,5 @@ func (s *slackClient) BulkSend(messages []string) error {
 }
 
 func NewSlackClient(token string, channel string, logger *zap.SugaredLogger) repository.MessageRepository {
-	return &slackClient{channel, slack.New(token),logger}
+	return &slackClient{channel, slack.New(token), logger}
 }
