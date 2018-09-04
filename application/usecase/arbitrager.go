@@ -8,6 +8,7 @@ import (
 	"github.com/fxpgr/go-exchange-client/models"
 	"strconv"
 	"time"
+	"sync"
 )
 
 var (
@@ -141,88 +142,110 @@ func(s *Arbitrager) TradeTriangle(o entity.TriangleOpportunity, expectedProfitRa
 	return nil
 }
 
-func(s *Arbitrager) TraceTriangle(o entity.TriangleOpportunity, expectedProfitRate float64) error {
-	if s.OngoingTriangleOpps.IsOngoing(&o) {
-		return nil
-	}
-	if err := s.OngoingTriangleOpps.Set(&o); err != nil {
-		logger.Get().Errorf("[Error] %s", err)
-		return err
-	}
-	computableBoardArray := &entity.ComputableBoardTriangleArray{
-		Arr: make([]entity.ComputableBoard, 0),
-	}
-	messageText := make([]string, 0)
-	messageText = append(messageText, fmt.Sprintf("--------------------Opportunity--------------------"))
-	for _, item := range o.Triples {
-		board, err := s.PublicResourceRepository.Board(item.Exchange, item.Trading, item.Settlement)
-		if err != nil {
-			//logger.Get().Errorf("[Error] %s", err)
-			s.OngoingTriangleOpps.Remove(&o)
-			return err
+func(s *Arbitrager) TraceTriangle(opps []*entity.TriangleOpportunity, expectedProfitRate float64) error {
+	for _,o := range opps {
+		if s.OngoingTriangleOpps.IsOngoing(o) {
+			continue
 		}
-		computableBoardArray.Set(entity.NewComputableBoard(*board, item))
-	}
-	buyPrice, sellPrice, err := computableBoardArray.SpreadPrices()
-	if sellPrice/buyPrice < 1+expectedProfitRate {
-		s.OngoingTriangleOpps.Remove(&o)
-		return nil
-	}
-	messageText, err = computableBoardArray.GenerateText()
-	if err != nil {
-		logger.Get().Errorf("[Error] %s", err)
-		s.OngoingTriangleOpps.Remove(&o)
-		return err
-	}
-	messageText = append(messageText, fmt.Sprintf("Spread                        : %16s", strconv.FormatFloat(sellPrice-buyPrice, 'f', 16, 64)))
-	messageText = append(messageText, fmt.Sprintf("SpreadRate                    : %16s", strconv.FormatFloat(sellPrice/buyPrice, 'f', 16, 64)))
-	messageText = append(messageText, fmt.Sprintf("---------------------------------------------------"))
-	s.MessageRepository.BulkSend(messageText)
-	s.MessageRepository.Send(fmt.Sprintf("[Arbitrager] then I'll trace margin until its convergenced"))
-	initialBuyPrice := buyPrice
-	initialSellPrice := sellPrice
-	time.Sleep(3 * time.Second)
-loop:
-	for {
-		computableBoardArray := &entity.ComputableBoardTriangleArray{
-			Arr: make([]entity.ComputableBoard, 0),
-		}
-		for _, item := range o.Triples {
-			board, err := s.PublicResourceRepository.Board(item.Exchange, item.Trading, item.Settlement)
-			if err != nil {
-				//logger.Get().Errorf("[Error] %s : %s", item.Exchange, err)
-				time.Sleep(15 * time.Second)
-				continue loop
-			}
-			computableBoardArray.Set(entity.NewComputableBoard(*board, item))
-		}
-		buyPrice, sellPrice, err = computableBoardArray.SpreadPrices()
-		if err != nil {
+		if err := s.OngoingTriangleOpps.Set(o); err != nil {
 			logger.Get().Errorf("[Error] %s", err)
-			time.Sleep(15 * time.Second)
-			continue loop
+			continue
 		}
-		if sellPrice/buyPrice < 1+expectedProfitRate/4 {
-			s.MessageRepository.Send(fmt.Sprintf("[Arbitrager] convergence found"))
-			messageText := make([]string, 0)
-			messageText = append(messageText, "--------------------Convergence--------------------")
-			for _, item := range o.Triples {
-				messageText = append(messageText, fmt.Sprintf("%4s %4s-%4s On %8s", item.Op, item.Trading, item.Settlement, item.Exchange))
-			}
-			messageText = append(messageText, fmt.Sprintf("BUY  : %16s -> %16s", strconv.FormatFloat(initialBuyPrice, 'f', 16, 64), strconv.FormatFloat(buyPrice, 'f', 16, 64)))
-			messageText = append(messageText, fmt.Sprintf("SELL : %16s -> %16s", strconv.FormatFloat(initialSellPrice, 'f', 16, 64), strconv.FormatFloat(sellPrice, 'f', 16, 64)))
-			messageText = append(messageText, fmt.Sprintf("---------------------------------------------------"))
-			s.MessageRepository.BulkSend(messageText)
-			break
-		}
-		time.Sleep(15 * time.Second)
 	}
 
-	if err := s.OngoingTriangleOpps.Remove(&o); err != nil {
-		logger.Get().Error(err)
-		return err
+	workers := make(chan int, 4)
+	wg := &sync.WaitGroup{}
+
+	for _, ongoingOpp := range s.OngoingTriangleOpps.GetAll() {
+		wg.Add(1)
+		workers <- 1
+		go func(ongoingOpp *entity.TriangleOpportunity){
+			defer wg.Done()
+			messageText := make([]string, 0)
+			messageText = append(messageText, fmt.Sprintf("--------------------Opportunity--------------------"))
+
+			computableBoardArray := &entity.ComputableBoardTriangleArray{
+				Arr: make([]entity.ComputableBoard, 0),
+			}
+			for _, item := range ongoingOpp.Triples {
+				board, err := s.PublicResourceRepository.Board(item.Exchange, item.Trading, item.Settlement)
+				if err != nil {
+					//logger.Get().Errorf("[Error] %s", err)
+					s.OngoingTriangleOpps.Remove(ongoingOpp)
+					<-workers
+					return
+				}
+				computableBoardArray.Set(entity.NewComputableBoard(*board, item))
+			}
+			buyPrice, sellPrice, err := computableBoardArray.SpreadPrices()
+
+			if sellPrice/buyPrice > 1+expectedProfitRate {
+				if ongoingOpp.StartedTime.IsZero() == true {
+					// initialize
+					ongoingOpp.StartedTime = time.Now()
+					ongoingOpp.InitialBuyPrice = buyPrice
+					ongoingOpp.InitialSellPrice = sellPrice
+					generatedMessage, err := computableBoardArray.GenerateText()
+					if err != nil {
+						logger.Get().Errorf("[Error] %s", err)
+						s.OngoingTriangleOpps.Remove(ongoingOpp)
+						<-workers
+						return
+					}
+					messageText = append(messageText, generatedMessage...)
+					messageText = append(messageText, fmt.Sprintf("Spread                        : %16s", strconv.FormatFloat(sellPrice-buyPrice, 'f', 16, 64)))
+					messageText = append(messageText, fmt.Sprintf("SpreadRate                    : %16s", strconv.FormatFloat(sellPrice/buyPrice, 'f', 16, 64)))
+					messageText = append(messageText, fmt.Sprintf("---------------------------------------------------"))
+
+					s.MessageRepository.BulkSend(messageText)
+					s.MessageRepository.Send(fmt.Sprintf("[Arbitrager] then I'll trace margin until its convergenced"))
+				}
+			}
+
+			if sellPrice/buyPrice < 1+expectedProfitRate/4 {
+				if ongoingOpp.StartedTime.IsZero() == true {
+					s.OngoingTriangleOpps.Remove(ongoingOpp)
+					<-workers
+					return
+				}
+				// close処理
+				computableBoardArray := &entity.ComputableBoardTriangleArray{
+					Arr: make([]entity.ComputableBoard, 0),
+				}
+				for _, item := range ongoingOpp.Triples {
+					board, err := s.PublicResourceRepository.Board(item.Exchange, item.Trading, item.Settlement)
+					if err != nil {
+						//logger.Get().Errorf("[Error] %s : %s", item.Exchange, err)
+						continue
+					}
+					computableBoardArray.Set(entity.NewComputableBoard(*board, item))
+				}
+				buyPrice, sellPrice, err = computableBoardArray.SpreadPrices()
+				if err != nil {
+					logger.Get().Errorf("[Error] %s", err)
+					<-workers
+					return
+				}
+				if sellPrice/buyPrice < 1+expectedProfitRate/4 {
+					s.MessageRepository.Send(fmt.Sprintf("[Arbitrager] convergence found"))
+					messageText := make([]string, 0)
+					messageText = append(messageText, "--------------------Convergence--------------------")
+					for _, item := range ongoingOpp.Triples {
+						messageText = append(messageText, fmt.Sprintf("%4s %4s-%4s On %8s", item.Op, item.Trading, item.Settlement, item.Exchange))
+					}
+					messageText = append(messageText, fmt.Sprintf("BUY  : %16s -> %16s", strconv.FormatFloat(ongoingOpp.InitialBuyPrice, 'f', 16, 64), strconv.FormatFloat(buyPrice, 'f', 16, 64)))
+					messageText = append(messageText, fmt.Sprintf("SELL : %16s -> %16s", strconv.FormatFloat(ongoingOpp.InitialSellPrice, 'f', 16, 64), strconv.FormatFloat(sellPrice, 'f', 16, 64)))
+					messageText = append(messageText, fmt.Sprintf("---------------------------------------------------"))
+					s.MessageRepository.BulkSend(messageText)
+				}
+			}
+			<-workers
+		}(ongoingOpp)
+
 	}
+	wg.Wait()
 	return nil
+
 }
 
 /*func (s *Arbitrager) Arbitrage(position models.Position, o entity.Opportunity, expectedProfitRate float64) error {

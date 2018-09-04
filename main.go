@@ -89,6 +89,9 @@ func main() {
 
 			scanner.SyncRate(exchanges)
 			tick := time.NewTicker(15 * time.Second)
+			func (){
+
+			}()
 			for {
 				select {
 				case <-tick.C:
@@ -97,8 +100,10 @@ func main() {
 						logger.Get().Error(err)
 						continue
 					}
-					for _, o := range opps.GetAll() {
-						go arbitrager.TraceTriangle(o, 0.003)
+					err = arbitrager.TraceTriangle(opps.GetAll(), 0.003)
+					if err != nil {
+						logger.Get().Error(err)
+						continue
 					}
 				}
 			}

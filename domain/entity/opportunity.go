@@ -3,6 +3,7 @@ package entity
 import (
 	"github.com/fxpgr/go-exchange-client/models"
 	"reflect"
+	"time"
 )
 
 func NewOpportunity(items []Item) Opportunity {
@@ -72,12 +73,24 @@ type Item struct {
 }
 
 type TriangleOpportunity struct {
+	StartedTime time.Time
+	InitialBuyPrice float64
+	InitialSellPrice float64
+	ClosedTime time.Time
 	Triples []Item
 }
 
 type TriangleOpportunities struct {
-	opps []TriangleOpportunity
+	opps []*TriangleOpportunity
 }
+
+func NewTriangleOpportunity(triples []Item) *TriangleOpportunity {
+	return &TriangleOpportunity{
+		StartedTime: time.Time{},
+		Triples:triples,
+	}
+}
+
 
 func (t *TriangleOpportunity) InterMediaMethod() string {
 	buyCounter := 0
@@ -94,10 +107,10 @@ func (t *TriangleOpportunity) InterMediaMethod() string {
 
 func NewTriangleOpportunities() *TriangleOpportunities {
 	return &TriangleOpportunities{
-		opps: make([]TriangleOpportunity, 0),
+		opps: make([]*TriangleOpportunity, 0),
 	}
 }
-func (os *TriangleOpportunities) GetAll() []TriangleOpportunity {
+func (os *TriangleOpportunities) GetAll() []*TriangleOpportunity {
 	return os.opps
 }
 
@@ -116,12 +129,12 @@ func (os *TriangleOpportunities) IsOngoing(o *TriangleOpportunity) bool {
 }
 
 func (os *TriangleOpportunities) Set(o *TriangleOpportunity) error {
-	os.opps = append(os.opps, *o)
+	os.opps = append(os.opps, o)
 	return nil
 }
 
 func (os *TriangleOpportunities) Remove(o *TriangleOpportunity) error {
-	opps := make([]TriangleOpportunity, 0)
+	opps := make([]*TriangleOpportunity, 0)
 	for _, w := range os.opps {
 		for _, x := range w.Triples {
 			for _, p := range o.Triples {
