@@ -237,6 +237,7 @@ func (s *Arbitrager) TraceTriangle(opps []*entity.TriangleOpportunity, expectedP
 					messageText = append(messageText, fmt.Sprintf("SELL : %16s -> %16s", strconv.FormatFloat(ongoingOpp.InitialSellPrice, 'f', 16, 64), strconv.FormatFloat(sellPrice, 'f', 16, 64)))
 					messageText = append(messageText, fmt.Sprintf("---------------------------------------------------"))
 					s.MessageRepository.BulkSend(messageText)
+					s.OngoingTriangleOpps.Remove(ongoingOpp)
 				}
 			}
 			<-workers
