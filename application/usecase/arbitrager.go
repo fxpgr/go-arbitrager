@@ -7,8 +7,8 @@ import (
 	"github.com/fxpgr/go-arbitrager/infrastructure/logger"
 	"github.com/fxpgr/go-exchange-client/models"
 	"strconv"
-	"time"
 	"sync"
+	"time"
 )
 
 var (
@@ -137,13 +137,13 @@ func (s *Arbitrager) Trace(position models.Position, o entity.Opportunity, expec
 	return nil
 }
 
-func(s *Arbitrager) TradeTriangle(o entity.TriangleOpportunity, expectedProfitRate float64) error {
+func (s *Arbitrager) TradeTriangle(o entity.TriangleOpportunity, expectedProfitRate float64) error {
 	// does not implemented
 	return nil
 }
 
-func(s *Arbitrager) TraceTriangle(opps []*entity.TriangleOpportunity, expectedProfitRate float64) error {
-	for _,o := range opps {
+func (s *Arbitrager) TraceTriangle(opps []*entity.TriangleOpportunity, expectedProfitRate float64) error {
+	for _, o := range opps {
 		if s.OngoingTriangleOpps.IsOngoing(o) {
 			continue
 		}
@@ -159,7 +159,7 @@ func(s *Arbitrager) TraceTriangle(opps []*entity.TriangleOpportunity, expectedPr
 	for _, ongoingOpp := range s.OngoingTriangleOpps.GetAll() {
 		wg.Add(1)
 		workers <- 1
-		go func(ongoingOpp *entity.TriangleOpportunity){
+		go func(ongoingOpp *entity.TriangleOpportunity) {
 			defer wg.Done()
 			messageText := make([]string, 0)
 			messageText = append(messageText, fmt.Sprintf("--------------------Opportunity--------------------"))

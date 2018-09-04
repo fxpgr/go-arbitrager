@@ -372,7 +372,7 @@ func (s *Scanner) TriangleOpportunities(expectedProfitRate float64) (opps entity
 						{"BUY", arbTriple.a.exchange, arbTriple.a.pair.Trading, arbTriple.a.pair.Settlement},
 						{"SELL", arbTriple.b.exchange, arbTriple.b.pair.Trading, arbTriple.b.pair.Settlement},
 						{"SELL", arbTriple.intermediaPair.exchange, arbTriple.intermediaPair.pair.Trading, arbTriple.intermediaPair.pair.Settlement},
-					},)
+					})
 				opps.Set(opp)
 			}
 			if aBestBidPrice/(intermediateAskPrice*bBestAskPrice) > 1+expectedProfitRate {
@@ -381,7 +381,7 @@ func (s *Scanner) TriangleOpportunities(expectedProfitRate float64) (opps entity
 						{"BUY", arbTriple.intermediaPair.exchange, arbTriple.intermediaPair.pair.Trading, arbTriple.intermediaPair.pair.Settlement},
 						{"BUY", arbTriple.b.exchange, arbTriple.b.pair.Trading, arbTriple.b.pair.Settlement},
 						{"SELL", arbTriple.a.exchange, arbTriple.a.pair.Trading, arbTriple.a.pair.Settlement},
-					},)
+					})
 
 				opps.Set(opp)
 			}

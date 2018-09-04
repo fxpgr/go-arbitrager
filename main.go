@@ -89,7 +89,7 @@ func main() {
 
 			scanner.SyncRate(exchanges)
 			tick := time.NewTicker(15 * time.Second)
-			func (){
+			func() {
 
 			}()
 			for {

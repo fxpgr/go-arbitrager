@@ -73,11 +73,11 @@ type Item struct {
 }
 
 type TriangleOpportunity struct {
-	StartedTime time.Time
-	InitialBuyPrice float64
+	StartedTime      time.Time
+	InitialBuyPrice  float64
 	InitialSellPrice float64
-	ClosedTime time.Time
-	Triples []Item
+	ClosedTime       time.Time
+	Triples          []Item
 }
 
 type TriangleOpportunities struct {
@@ -87,10 +87,9 @@ type TriangleOpportunities struct {
 func NewTriangleOpportunity(triples []Item) *TriangleOpportunity {
 	return &TriangleOpportunity{
 		StartedTime: time.Time{},
-		Triples:triples,
+		Triples:     triples,
 	}
 }
-
 
 func (t *TriangleOpportunity) InterMediaMethod() string {
 	buyCounter := 0
