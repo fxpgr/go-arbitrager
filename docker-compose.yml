@@ -3,7 +3,7 @@ services:
   arbitrager:
     build: .
     image: go-arbitrager
-    command: go-arbitrager
+    command: go-arbitrager --exchange=huobi,lbank,kucoin
     volumes:
       - ./:/go/src/github.com/fxpgr/go-arbitrager
 

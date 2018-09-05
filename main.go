@@ -9,13 +9,13 @@ import (
 	"github.com/fxpgr/go-arbitrager/infrastructure/logger"
 	"github.com/fxpgr/go-arbitrager/infrastructure/persistence"
 	"github.com/fxpgr/go-exchange-client/api/private"
-	"github.com/fxpgr/go-exchange-client/models"
 	"github.com/urfave/cli"
 	"gopkg.in/mgo.v2"
 	"net/http"
 	_ "net/http/pprof"
 	"os"
 	"time"
+	"strings"
 )
 
 func help_and_exit() {
@@ -37,6 +37,11 @@ func main() {
 			Usage: "display mode",
 		},
 		cli.StringFlag{
+			Name:  "exchange, e",
+			Value: "",
+			Usage: "",
+		},
+		cli.StringFlag{
 			Name:  "config, c",
 			Value: "config.yml",
 			Usage: "config path",
@@ -47,10 +52,12 @@ func main() {
 		DB: session.DB("arbitrager"),
 	}
 	app.Action = func(c *cli.Context) error {
-		if c.String("mode") == "lab" {
-		} else if c.String("mode") == "test" {
 			configPath := c.String("config")
-			exchanges := []string{"lbank", "kucoin"}
+			exchanges := []string{"huobi"}
+			if c.String("exchange") != "" {
+				exchanges=strings.Split(c.String("exchange"), ",")
+			}
+
 			conf := config.ReadConfig(configPath)
 
 			var scanner usecase.Scanner
@@ -88,13 +95,14 @@ func main() {
 			scanner.MessageRepository.Send("[Scanner] scan started")
 
 			scanner.SyncRate(exchanges)
-			tick := time.NewTicker(15 * time.Second)
+			tick := time.NewTicker(20 * time.Second)
 			func() {
 
 			}()
 			for {
 				select {
 				case <-tick.C:
+					logger.Get().Infof("%s",time.Now())
 					opps, err := scanner.TriangleOpportunities(0.003)
 					if err != nil {
 						logger.Get().Error(err)
@@ -107,65 +115,7 @@ func main() {
 					}
 				}
 			}
-		} else {
-			configPath := c.String("config")
-			exchanges := []string{"poloniex", "hitbtc", "huobi", "lbank", "kucoin"}
-			conf := config.ReadConfig(configPath)
 
-			var scanner usecase.Scanner
-			var arbitrager usecase.Arbitrager
-
-			var g inject.Graph
-			err := g.Provide(
-				&inject.Object{Value: persistence.NewPublicResourceRepository(exchanges)},
-				&inject.Object{Value: persistence.NewPrivateResourceRepository(private.PROJECT, conf, exchanges)},
-				&inject.Object{Value: historyRepository},
-				&inject.Object{Value: persistence.NewSlackClient(conf.Slack.APIToken, conf.Slack.Channel, logger.Get())},
-				&inject.Object{Value: entity.NewFrozenCurrencySyncMap()},
-				&inject.Object{Value: entity.NewExchangeSymbolSyncMap()},
-				&inject.Object{Value: entity.NewRateSyncMap()},
-				&inject.Object{Value: entity.NewVolumeSyncMap()},
-				&inject.Object{Value: entity.NewOpportunities()},
-				&inject.Object{Value: usecase.NewArbitragePairs()},
-				&inject.Object{Value: &arbitrager},
-				&inject.Object{Value: &scanner},
-			)
-			if err != nil {
-				panic(err)
-			}
-			if err := g.Populate(); err != nil {
-				panic(err)
-			}
-			err = scanner.RegisterExchanges(exchanges)
-			if err != nil {
-				panic(err)
-			}
-			scanner.MessageRepository.Send(fmt.Sprintf("[Scanner] swing-arbitrage scan mode"))
-			scanner.MessageRepository.Send(fmt.Sprintf("[Scanner] expected profit rate:%f", 0.003))
-			scanner.MessageRepository.Send(fmt.Sprintf("[Scanner] I'll watch exchanges %v", exchanges))
-			scanner.MessageRepository.Send(fmt.Sprintf("[Scanner] %d pairs registered", len(scanner.TriangleArbitrageTriples.Get())))
-			scanner.MessageRepository.Send(fmt.Sprintf("[Scanner] scan started"))
-			scanner.SyncRate(exchanges)
-			err = scanner.FilterCurrency([]string{"ETH"})
-			if err != nil {
-				panic(err)
-			}
-			scanner.MessageRepository.Send("[Scanner] filtered with ETH")
-			tick := time.NewTicker(15 * time.Second)
-			for {
-				select {
-				case <-tick.C:
-					opps, err := scanner.Opportunities(0.01)
-					if err != nil {
-						logger.Get().Error(err)
-						continue
-					}
-					for _, o := range opps.GetAll() {
-						go arbitrager.Trace(models.Long, o, 0.01)
-					}
-				}
-			}
-		}
 
 		return nil
 	}

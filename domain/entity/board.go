@@ -16,7 +16,7 @@ func (b *ComputableBoardTriangleArray) Set(c ComputableBoard) {
 }
 
 func (b *ComputableBoardTriangleArray) SpreadPrices() (buyPrice float64, sellPrice float64, err error) {
-	buyComputableBoardArray, sellComputableBoardArray, nil := b.DivideArrayBySide()
+	buyComputableBoardArray, sellComputableBoardArray, err := b.DivideArrayBySide()
 	if err != nil {
 		return 0, 0, errors.WithStack(err)
 	}
@@ -29,6 +29,52 @@ func (b *ComputableBoardTriangleArray) SpreadPrices() (buyPrice float64, sellPri
 		sellPrice *= bc.BestBidPrice()
 	}
 	return buyPrice, sellPrice, nil
+}
+
+func (b *ComputableBoardTriangleArray) GetTradeAmount() (float64, string, error) {
+	amountArray := make([]float64, 0)
+	buyComputableBoardArray, sellComputableBoardArray, err := b.DivideArrayBySide()
+	if err != nil {
+		return 0,"", err
+	}
+	duplicateSide, err := b.DuplicateSide()
+	if err != nil {
+		return 0,"", err
+	}
+	pivotCurrency, err := b.PivotCurrency()
+	if err != nil {
+		return 0,"", err
+	}
+
+	for _, cb := range b.Arr {
+		if cb.Item.Op == "BUY" {
+			if cb.Item.Op == duplicateSide && cb.Item.Settlement != pivotCurrency {
+				pivotBasedBoard, err := buyComputableBoardArray[0].Multiply(&buyComputableBoardArray[1], pivotCurrency)
+				if err != nil {
+					return 0,"", errors.WithStack(err)
+				}
+				amount := pivotBasedBoard.BestAskAmount() * cb.BestAskPrice()
+				amountArray = append(amountArray, amount)
+			} else {
+				amount := cb.BestAskPrice() * cb.BestAskAmount()
+				amountArray = append(amountArray, amount)
+			}
+		}
+		if cb.Item.Op == "SELL" {
+			if cb.Item.Op == duplicateSide && cb.Item.Settlement != pivotCurrency {
+				pivotBasedBoard, err := sellComputableBoardArray[0].Multiply(&sellComputableBoardArray[1], pivotCurrency)
+				if err != nil {
+					return 0,"", errors.WithStack(err)
+				}
+				amount := pivotBasedBoard.BestBidAmount() * cb.BestBidPrice()
+				amountArray = append(amountArray, amount)
+			} else {
+				amount := cb.BestBidPrice() * cb.BestBidAmount()
+				amountArray = append(amountArray, amount)
+			}
+		}
+	}
+	return min(amountArray),pivotCurrency,nil
 }
 
 func (b *ComputableBoardTriangleArray) GenerateText() (messageText []string, err error) {

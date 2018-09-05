@@ -104,6 +104,19 @@ func (t *TriangleOpportunity) InterMediaMethod() string {
 	return "SELL"
 }
 
+func (t *TriangleOpportunity) PivotCurrency() string {
+	counter := make(map[string]int)
+	for _, cb := range t.Triples {
+		counter[cb.Settlement] += 1
+	}
+	for k, c := range counter {
+		if c == 2 {
+			return k
+		}
+	}
+	return ""
+}
+
 func NewTriangleOpportunities() *TriangleOpportunities {
 	return &TriangleOpportunities{
 		opps: make([]*TriangleOpportunity, 0),
@@ -135,14 +148,9 @@ func (os *TriangleOpportunities) Set(o *TriangleOpportunity) error {
 func (os *TriangleOpportunities) Remove(o *TriangleOpportunity) error {
 	opps := make([]*TriangleOpportunity, 0)
 	for _, w := range os.opps {
-		for _, x := range w.Triples {
-			for _, p := range o.Triples {
-				if p.Trading == x.Trading && p.Settlement == x.Settlement &&
-					p.Exchange == x.Exchange && p.Op == x.Op {
-				} else {
-					opps = append(opps, w)
-				}
-			}
+		if reflect.DeepEqual(w.Triples, o.Triples) {
+		} else {
+			opps = append(opps, w)
 		}
 	}
 	os.opps = opps

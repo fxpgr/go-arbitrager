@@ -28,6 +28,7 @@ type Config struct {
 	Bitflyer KeySetting   `yaml:"bitflyer"`
 	Huobi    KeySetting   `yaml:"huobi"`
 	Lbank    KeySetting   `yaml:"lbank"`
+	Kucoin   KeySetting   `yaml:"kucoin"`
 }
 
 func (c *Config) Get(exchange string) KeySetting {
@@ -42,6 +43,8 @@ func (c *Config) Get(exchange string) KeySetting {
 		return c.Huobi
 	case "lbank":
 		return c.Lbank
+	case "kucoin":
+		return c.Kucoin
 	}
 	return KeySetting{}
 }
