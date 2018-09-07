@@ -78,7 +78,7 @@ func (h *httpPrivateClient) Order(exchange string, trading string, settlement st
 }
 func (h *httpPrivateClient) CancelOrder(exchange string, trading string, settlement string, orderType models.OrderType, orderNumber string) error {
 	m := h.clientMap.Get(exchange)
-	return m.CancelOrder(trading, settlement,orderType,orderNumber)
+	return m.CancelOrder(trading, settlement, orderType, orderNumber)
 }
 func (h *httpPrivateClient) Transfer(exchange string, typ string, addr string,
 	amount float64, additionalFee float64) error {

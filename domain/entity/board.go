@@ -35,15 +35,15 @@ func (b *ComputableBoardTriangleArray) GetTradeAmount() (float64, string, error)
 	amountArray := make([]float64, 0)
 	buyComputableBoardArray, sellComputableBoardArray, err := b.DivideArrayBySide()
 	if err != nil {
-		return 0,"", err
+		return 0, "", err
 	}
 	duplicateSide, err := b.DuplicateSide()
 	if err != nil {
-		return 0,"", err
+		return 0, "", err
 	}
 	pivotCurrency, err := b.PivotCurrency()
 	if err != nil {
-		return 0,"", err
+		return 0, "", err
 	}
 
 	for _, cb := range b.Arr {
@@ -51,7 +51,7 @@ func (b *ComputableBoardTriangleArray) GetTradeAmount() (float64, string, error)
 			if cb.Item.Op == duplicateSide && cb.Item.Settlement != pivotCurrency {
 				pivotBasedBoard, err := buyComputableBoardArray[0].Multiply(&buyComputableBoardArray[1], pivotCurrency)
 				if err != nil {
-					return 0,"", errors.WithStack(err)
+					return 0, "", errors.WithStack(err)
 				}
 				amount := pivotBasedBoard.BestAskAmount() * cb.BestAskPrice()
 				amountArray = append(amountArray, amount)
@@ -64,7 +64,7 @@ func (b *ComputableBoardTriangleArray) GetTradeAmount() (float64, string, error)
 			if cb.Item.Op == duplicateSide && cb.Item.Settlement != pivotCurrency {
 				pivotBasedBoard, err := sellComputableBoardArray[0].Multiply(&sellComputableBoardArray[1], pivotCurrency)
 				if err != nil {
-					return 0,"", errors.WithStack(err)
+					return 0, "", errors.WithStack(err)
 				}
 				amount := pivotBasedBoard.BestBidAmount() * cb.BestBidPrice()
 				amountArray = append(amountArray, amount)
@@ -74,7 +74,7 @@ func (b *ComputableBoardTriangleArray) GetTradeAmount() (float64, string, error)
 			}
 		}
 	}
-	return min(amountArray),pivotCurrency,nil
+	return min(amountArray), pivotCurrency, nil
 }
 
 func (b *ComputableBoardTriangleArray) GenerateText() (messageText []string, err error) {

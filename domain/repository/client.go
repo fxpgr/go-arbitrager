@@ -25,7 +25,7 @@ type PrivateResourceRepository interface {
 	IsOrderFilled(exchange string, trading string, settlement string) (bool, error)
 	Order(exchange string, trading string, settlement string,
 		ordertype models.OrderType, price float64, amount float64) (string, error)
-	CancelOrder(exchange string,trading string, settlement string, orderType models.OrderType,  orderNumber string) error
+	CancelOrder(exchange string, trading string, settlement string, orderType models.OrderType, orderNumber string) error
 	//FilledOrderInfo(orderNumber string) (models.FilledOrderInfo,error)
 	Transfer(exchange string, typ string, addr string,
 		amount float64, additionalFee float64) error

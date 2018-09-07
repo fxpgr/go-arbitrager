@@ -5,11 +5,11 @@ import (
 	"github.com/fxpgr/go-arbitrager/domain/entity"
 	"github.com/fxpgr/go-arbitrager/domain/repository"
 	"github.com/fxpgr/go-arbitrager/infrastructure/logger"
+	"github.com/fxpgr/go-exchange-client/models"
+	"github.com/pkg/errors"
 	"strconv"
 	"sync"
 	"time"
-	"github.com/pkg/errors"
-	"github.com/fxpgr/go-exchange-client/models"
 )
 
 var (
@@ -50,6 +50,7 @@ const (
 	INTERRUPTED
 	END
 )
+
 /*
 func (s *Arbitrager) Trace(position models.Position, o entity.Opportunity, expectedProfitRate float64) error {
 	if s.OngoingOpps.IsOngoing(&o) {
@@ -168,35 +169,35 @@ func (s *Arbitrager) TradeTriangle(o *entity.TriangleOpportunity, expectedProfit
 	messageText = append(messageText, fmt.Sprintf("---------------------------------------------------"))
 	s.MessageRepository.BulkSend(messageText)
 
-	if sellPrice/buyPrice < 1 + expectedProfitRate {
+	if sellPrice/buyPrice < 1+expectedProfitRate {
 		return errors.Errorf("there is not margin")
 	}
-	tradeAmount,currency,err :=computableBoardArray.GetTradeAmount()
+	tradeAmount, currency, err := computableBoardArray.GetTradeAmount()
 	if err != nil {
 		return err
 	}
 	tradeFlag := false
 	if currency == "BTC" && tradeAmount >= 0.0001 {
 		tradeFlag = true
-	} else if currency ==  "ETH" && tradeAmount >= 0.001 {
+	} else if currency == "ETH" && tradeAmount >= 0.001 {
 		tradeFlag = true
 	} else {
 		s.MessageRepository.Send("there is no sufficient amount")
 	}
 	if tradeFlag {
-		balances, err:= s.PrivateResourceRepository.Balances(o.Triples[0].Exchange)
-		if err !=nil {
+		balances, err := s.PrivateResourceRepository.Balances(o.Triples[0].Exchange)
+		if err != nil {
 			return err
 		}
 		if balances[currency] <= tradeAmount {
-			logger.Get().Errorf("there is no amount of %s (expected %s but %s)",currency, tradeAmount, balances[currency])
+			logger.Get().Errorf("there is no amount of %s (expected %s but %s)", currency, tradeAmount, balances[currency])
 			tradeAmount = balances[currency]
 		}
-		for _,cb := range computableBoardArray.Arr {
+		for _, cb := range computableBoardArray.Arr {
 			var (
 				orderType models.OrderType
-				price float64
-				amount float64
+				price     float64
+				amount    float64
 			)
 			if cb.Item.Op == "BUY" {
 				orderType = models.Bid
@@ -207,7 +208,7 @@ func (s *Arbitrager) TradeTriangle(o *entity.TriangleOpportunity, expectedProfit
 				price = cb.BestBidPrice()
 				amount = cb.BestBidAmount()
 			}
-			orderId,err:=s.PrivateResourceRepository.Order(cb.Item.Exchange, cb.Item.Trading, cb.Item.Settlement, orderType, price, amount)
+			orderId, err := s.PrivateResourceRepository.Order(cb.Item.Exchange, cb.Item.Trading, cb.Item.Settlement, orderType, price, amount)
 			if err != nil {
 				return err
 			}
@@ -246,7 +247,6 @@ func (s *Arbitrager) TraceTriangle(opps []*entity.TriangleOpportunity, expectedP
 			messageText := make([]string, 0)
 			messageText = append(messageText, fmt.Sprintf("--------------------Opportunity--------------------"))
 
-
 			computableBoardArray := &entity.ComputableBoardTriangleArray{
 				Arr: make([]entity.ComputableBoard, 0),
 			}
@@ -261,7 +261,6 @@ func (s *Arbitrager) TraceTriangle(opps []*entity.TriangleOpportunity, expectedP
 				computableBoardArray.Set(entity.NewComputableBoard(*board, item))
 			}
 			buyPrice, sellPrice, err := computableBoardArray.SpreadPrices()
-
 
 			if sellPrice/buyPrice > 1+expectedProfitRate {
 				if ongoingOpp.StartedTime.IsZero() == true {
@@ -316,7 +315,7 @@ func (s *Arbitrager) TraceTriangle(opps []*entity.TriangleOpportunity, expectedP
 					for _, item := range ongoingOpp.Triples {
 						messageText = append(messageText, fmt.Sprintf("%4s %4s-%4s On %8s", item.Op, item.Trading, item.Settlement, item.Exchange))
 					}
-					tradeAmount,pivotCurrency, err := computableBoardArray.GetTradeAmount()
+					tradeAmount, pivotCurrency, err := computableBoardArray.GetTradeAmount()
 					if err != nil {
 						logger.Get().Errorf("[Error] %s", err)
 						<-workers
