@@ -155,6 +155,18 @@ func (s *Arbitrager) TradeTriangle(o *entity.TriangleOpportunity, expectedProfit
 	if err != nil {
 		return err
 	}
+	messageText := make([]string, 0)
+	messageText = append(messageText, fmt.Sprintf("--------------------TryArbitrage--------------------"))
+	generatedMessage, err := computableBoardArray.GenerateText()
+	if err != nil {
+		logger.Get().Errorf("[Error] %s", err)
+	} else {
+		messageText = append(messageText, generatedMessage...)
+	}
+	messageText = append(messageText, fmt.Sprintf("Spread                        : %16s", strconv.FormatFloat(sellPrice-buyPrice, 'f', 16, 64)))
+	messageText = append(messageText, fmt.Sprintf("SpreadRate                    : %16s", strconv.FormatFloat(sellPrice/buyPrice, 'f', 16, 64)))
+	messageText = append(messageText, fmt.Sprintf("---------------------------------------------------"))
+	s.MessageRepository.BulkSend(messageText)
 
 	if sellPrice/buyPrice < 1 + expectedProfitRate {
 		return errors.Errorf("there is not margin")
@@ -168,6 +180,8 @@ func (s *Arbitrager) TradeTriangle(o *entity.TriangleOpportunity, expectedProfit
 		tradeFlag = true
 	} else if currency ==  "ETH" && tradeAmount >= 0.001 {
 		tradeFlag = true
+	} else {
+		s.MessageRepository.Send("there is no sufficient amount")
 	}
 	if tradeFlag {
 		balances, err:= s.PrivateResourceRepository.Balances(o.Triples[0].Exchange)
@@ -175,7 +189,8 @@ func (s *Arbitrager) TradeTriangle(o *entity.TriangleOpportunity, expectedProfit
 			return err
 		}
 		if balances[currency] <= tradeAmount {
-			return errors.Errorf("there is no amount of %s (expected %s but %s)",currency, tradeAmount, balances[currency])
+			logger.Get().Errorf("there is no amount of %s (expected %s but %s)",currency, tradeAmount, balances[currency])
+			tradeAmount = balances[currency]
 		}
 		for _,cb := range computableBoardArray.Arr {
 			var (

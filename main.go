@@ -53,7 +53,7 @@ func main() {
 	}
 	app.Action = func(c *cli.Context) error {
 			configPath := c.String("config")
-			exchanges := []string{"huobi"}
+			exchanges := []string{"kucoin"}
 			if c.String("exchange") != "" {
 				exchanges=strings.Split(c.String("exchange"), ",")
 			}
@@ -103,16 +103,25 @@ func main() {
 				select {
 				case <-tick.C:
 					logger.Get().Infof("%s",time.Now())
-					opps, err := scanner.TriangleOpportunities(0.003)
+					opps, err := scanner.TriangleOpportunities(0.005)
 					if err != nil {
 						logger.Get().Error(err)
 						continue
 					}
-					err = arbitrager.TraceTriangle(opps.GetAll(), 0.003)
-					if err != nil {
-						logger.Get().Error(err)
-						continue
+					for _,o := range opps.GetAll(){
+						err := arbitrager.TradeTriangle(o, 0.005)
+						if err != nil {
+							logger.Get().Error(err)
+							continue
+						}
 					}
+
+
+					//err = arbitrager.TraceTriangle(opps.GetAll(), 0.003)
+					//if err != nil {
+					//	logger.Get().Error(err)
+					//	continue
+					//}
 				}
 			}
 

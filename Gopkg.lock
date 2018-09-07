@@ -51,7 +51,7 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:87263477fffddd8679f506b6f702c37cd9454e14a5b094275e1991ec8f01e5eb"
+  digest = "1:520e748b129848709c5a6aa77715b7499cbda58a742e5beeddbcac29f409985b"
   name = "github.com/fxpgr/go-exchange-client"
   packages = [
     "api/private",
@@ -60,7 +60,7 @@
     "models",
   ]
   pruneopts = "UT"
-  revision = "1039d67fad6b9cbf0eecad91b81bd79423a50769"
+  revision = "5217e8219a8d8cb601cdeef15361fa92d363588d"
 
 [[projects]]
   branch = "master"
